@@ -1,0 +1,48 @@
+# Aqarat — Apache config for installing in a sub-folder (e.g. public_html/aqarat/ → example.com/aqarat/)
+# or at the domain root. No RewriteBase needed: rules are relative to this folder.
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Never serve internal code, data, tests or VCS metadata
+    RewriteRule ^(app|data|bin|tests|deploy|node_modules|\.git)(/|$) - [F,L]
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule \.(md|sqlite|sqlite-wal|sqlite-shm|ini|log|sh|lock)$ - [F,L]
+
+    # Everything that is not an existing file goes to the front controller
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Fallback protection if mod_rewrite is unavailable
+<FilesMatch "(?i)(\.(md|sqlite|sqlite-wal|sqlite-shm|ini|log|sh)|^\.)">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_mime.c>
+    AddType font/woff2 .woff2
+    AddType application/manifest+json .webmanifest
+    AddType image/webp .webp
+</IfModule>
+
+# Compression (brotli when available, otherwise gzip)
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS text/html text/css application/javascript application/json application/manifest+json image/svg+xml application/xml text/plain
+</IfModule>
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json application/manifest+json image/svg+xml application/xml text/plain
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Asset URLs carry a content hash (?v=…), so they can be cached "forever"
+    <FilesMatch "\.(css|js|svg|png|webp|woff2|jpg)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    # The service worker must always be revalidated so updates roll out
+    <Files "sw.js">
+        Header set Cache-Control "no-cache"
+        Header set Service-Worker-Allowed "./"
+    </Files>
+</IfModule>

@@ -9,7 +9,7 @@ $contactWa = ($office['whatsapp'] ?? '') ?: $contactPhone;
 $waText = t('wa_message', ['title' => $p['title'], 'id' => $p['id']]) . ' ' . absolute_base_url() . '/property/' . (int) $p['id'];
 $isLive = $p['status'] === 'published';
 ?>
-<div class="container property-page" data-recent-item
+<div class="container property-page" data-recent-item data-view-beacon="<?= e(url('property/' . $p['id'] . '/view')) ?>"
      data-id="<?= (int) $p['id'] ?>" data-title="<?= e($p['title']) ?>" data-price="<?= e(price_label($p)) ?>"
      data-url="<?= e(property_url($p)) ?>" data-thumb="<?= e($p['cover_thumb'] ? upload_url($p['cover_thumb']) : '') ?>">
     <nav class="breadcrumbs" aria-label="<?= e(t('breadcrumbs')) ?>">
@@ -32,8 +32,12 @@ $isLive = $p['status'] === 'published';
         <section class="gallery" data-count="<?= min(5, count($images)) ?>" aria-label="<?= e(t('photos')) ?>" data-gallery>
             <?php foreach (array_slice($images, 0, 5) as $i => $img): ?>
                 <button type="button" class="gallery-item<?= $i === 0 ? ' gallery-main' : '' ?>" data-index="<?= $i ?>"
+                        data-color="<?= e(preg_match('/^#[0-9a-f]{6}$/', (string) ($img['color'] ?? '')) ? $img['color'] : '') ?>"
                         aria-label="<?= e(t('open_photo', ['n' => $i + 1, 'total' => count($images)])) ?>">
                     <img src="<?= e(upload_url($i === 0 ? $img['filename'] : $img['thumb'])) ?>" alt=""
+                         srcset="<?= e(upload_url($img['thumb'])) ?> 640w, <?= e(upload_url($img['filename'])) ?> <?= (int) $img['width'] ?>w"
+                         sizes="<?= $i === 0 ? '(max-width: 720px) 100vw, 60vw' : '(max-width: 720px) 100vw, 20vw' ?>"
+                         <?= $i === 0 ? 'class="hero-photo"' : '' ?>
                          width="<?= $i === 0 ? (int) $img['width'] : 640 ?>" height="<?= $i === 0 ? (int) $img['height'] : 427 ?>"
                          <?= $i === 0 ? 'fetchpriority="high"' : 'loading="lazy"' ?> decoding="async">
                     <?php if ($i === 4 && count($images) > 5): ?>
@@ -41,6 +45,7 @@ $isLive = $p['status'] === 'published';
                     <?php endif; ?>
                 </button>
             <?php endforeach; ?>
+            <span class="gallery-counter" aria-hidden="true"><span data-gallery-pos>1</span> / <?= min(5, count($images)) ?></span>
             <button type="button" class="btn btn-light btn-sm gallery-all" data-index="0">
                 <svg aria-hidden="true"><use href="#i-expand"></use></svg><?= e(t('all_photos', ['n' => count($images)])) ?>
             </button>
@@ -252,7 +257,7 @@ $isLive = $p['status'] === 'published';
     </div>
 
     <?php if ($similar): ?>
-    <section class="section" aria-labelledby="similar-h">
+    <section class="section cv" aria-labelledby="similar-h">
         <h2 id="similar-h" class="section-title"><?= e(t('similar_listings')) ?></h2>
         <div class="grid-cards">
             <?php foreach ($similar as $sp): ?>

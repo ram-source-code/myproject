@@ -70,7 +70,20 @@ $useMap = $useMap ?? false;
         <script src="<?= e(asset('vendor/markercluster/leaflet.markercluster.js')) ?>" defer></script>
         <meta name="map-tiles" content="<?= e(config('tile_url')) ?>" data-attribution="<?= e(config('tile_attribution')) ?>">
     <?php endif; ?>
+    <script src="<?= e(asset('js/boot.js')) ?>"></script>
     <script src="<?= e(asset('js/app.js')) ?>" defer></script>
+    <?php /* Hold the first paint (and the view transition) until <main> is parsed: no flash of a half page. */ ?>
+    <link rel="expect" href="#main" blocking="render">
+    <?php
+    // Speculation Rules: prefetch likely next pages on hover/touch, prerender listing and office pages.
+    $b = base_path();
+    $never = array_map(static fn($p) => ['not' => ['href_matches' => "$b/$p*"]], ['dashboard', 'admin', 'logout', 'lang/', 'push', 'api', 'install', 'login', 'register', 'og/', 'uploads/']);
+    $rules = [
+        'prefetch'  => [['where' => ['and' => array_merge([['href_matches' => "$b/*"]], $never, [['not' => ['selector_matches' => '[rel~=nofollow], [target=_blank], [download]']]])], 'eagerness' => 'moderate']],
+        'prerender' => [['where' => ['or' => [['href_matches' => "$b/property/*"], ['href_matches' => "$b/office/*"], ['href_matches' => "$b/city/*"]]], 'eagerness' => 'moderate']],
+    ];
+    ?>
+    <script type="speculationrules"><?= json_encode($rules, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 </head>
 <body class="<?= $user ? 'is-auth' : 'is-guest' ?>">
 <?= render_partial('partials/icons') ?>

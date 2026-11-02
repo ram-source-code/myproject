@@ -10,7 +10,7 @@
             <dl class="stat-tiles">
                 <div><dt><?= e(t('followers')) ?></dt><dd><?= (int) $o['followers'] ?></dd></div>
                 <div><dt><?= e(t('status_published')) ?></dt><dd><?= (int) $o['listings'] ?></dd></div>
-                <div><dt><?= e(t('verified')) ?></dt><dd><?= $o['is_verified'] ? '✓' : '—' ?></dd></div>
+                <div><dt><?= e(t('verified')) ?></dt><dd><svg class="stat-icon<?= $o['is_verified'] ? ' is-yes' : '' ?>" aria-hidden="true"><use href="#i-<?= $o['is_verified'] ? 'verified' : 'minus' ?>"></use></svg><span class="visually-hidden"><?= e($o['is_verified'] ? t('yes') : t('no')) ?></span></dd></div>
             </dl>
         <?php else: ?>
             <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-alert"></use></svg><p><?= e(t('create_office_first')) ?></p></div>

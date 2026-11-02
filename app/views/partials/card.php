@@ -6,9 +6,9 @@ $href = property_url($p);
 $headingTag = $headingTag ?? 'h3';
 ?>
 <article class="card property-card">
-    <div class="card-media">
+    <div class="card-media" data-color="<?= e(preg_match('/^#[0-9a-f]{6}$/', (string) ($p['cover_color'] ?? '')) ? $p['cover_color'] : '') ?>">
         <?php if (!empty($p['cover_thumb'])): ?>
-            <img src="<?= e(upload_url($p['cover_thumb'])) ?>" alt="" width="640" height="427"
+            <img class="card-photo" src="<?= e(upload_url($p['cover_thumb'])) ?>" alt="" width="640" height="427"
                  <?= !empty($priority) ? 'fetchpriority="high"' : 'loading="lazy"' ?> decoding="async">
         <?php else: ?>
             <div class="card-media-empty"><svg aria-hidden="true"><use href="#i-image"></use></svg></div>

@@ -1,7 +1,6 @@
-/data/*.sqlite
-/data/*.sqlite-wal
-/data/*.sqlite-shm
-/data/vapid.json
+# Runtime data: database, push private key and generated local config — never commit
+/data/*
+!/data/.htaccess
 /uploads/*
 !/uploads/.htaccess
 !/uploads/.gitkeep

@@ -61,12 +61,11 @@ function property_show(int $id): void
         exit;
     }
 
-    // Count a view once per session per listing
-    $_SESSION['_viewed'] ??= [];
-    if (!in_array($id, $_SESSION['_viewed'], true) && !can_manage_property($p, $user)) {
-        $_SESSION['_viewed'][] = $id;
-        $_SESSION['_viewed'] = array_slice($_SESSION['_viewed'], -200);
-        db()->prepare('UPDATE properties SET views = views + 1 WHERE id = ?')->execute([$id]);
+    // Count a view once per session per listing — but not for speculative prefetch/prerender
+    // (the page reports the view itself via a beacon if the visitor actually opens it).
+    $speculative = str_contains(strtolower((string) ($_SERVER['HTTP_SEC_PURPOSE'] ?? $_SERVER['HTTP_PURPOSE'] ?? '')), 'prefetch');
+    if (!$speculative) {
+        count_property_view($p, $user);
     }
 
     render('properties/show', [
@@ -189,4 +188,38 @@ function property_report(int $id): void
     }
     flash('success', t('report_thanks'));
     redirect(property_url($p));
+}
+
+
+function count_property_view(array $p, ?array $user): void
+{
+    $id = (int) $p['id'];
+    $_SESSION['_viewed'] ??= [];
+    if (!in_array($id, $_SESSION['_viewed'], true) && !can_manage_property($p, $user)) {
+        $_SESSION['_viewed'][] = $id;
+        $_SESSION['_viewed'] = array_slice($_SESSION['_viewed'], -200);
+        db()->prepare('UPDATE properties SET views = views + 1 WHERE id = ?')->execute([$id]);
+    }
+}
+
+/** Beacon from a prerendered page once it is actually shown. */
+function property_view_beacon(int $id): void
+{
+    $p = find_property($id);
+    if ($p && $p['status'] === 'published') {
+        count_property_view($p, current_user());
+    }
+    http_response_code(204);
+    exit;
+}
+
+/** Live "Show N results" count for the filter form. */
+function api_count(): void
+{
+    [$w, $args] = search_where(search_filters($_GET));
+    $stmt = db()->prepare("SELECT COUNT(*) FROM properties p WHERE $w");
+    $stmt->execute($args);
+    $n = (int) $stmt->fetchColumn();
+    header('Cache-Control: private, max-age=30');
+    json_out(['ok' => true, 'count' => $n, 'label' => t('show_n_results', ['n' => number_format($n)])]);
 }

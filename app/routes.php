@@ -28,6 +28,8 @@ function routes(): array
         ['POST', '/push/news',                          'push_news'],
         ['POST', '/push/status',                        'push_status'],
         ['GET',  '/api/map',                            'api_map'],
+        ['GET',  '/api/count',                          'api_count'],
+        ['POST', '/property/(\d+)/view',                'property_view_beacon'],
         ['GET',  '/manifest.webmanifest',               'pwa_manifest'],
         ['GET',  '/offline',                            'offline_page'],
         ['POST', '/push/search',                        'push_search_save'],
@@ -95,6 +97,10 @@ function dispatch(string $method, string $path): void
     $path = rtrim($path, '/') ?: '/';
     if ($method === 'HEAD') {
         $method = 'GET';
+    }
+    // Until an administrator exists, every page leads to the guided installer.
+    if (!admin_exists() && !in_array($path, ['/install', '/manifest.webmanifest', '/offline', '/robots.txt'], true)) {
+        redirect(url('install'), 302);
     }
 
     $allowed = [];

@@ -343,5 +343,10 @@ function migrations(): array
         CREATE INDEX idx_notifications_sub ON notifications(subscription_id, created_at);
         CREATE INDEX idx_notifications_prop ON notifications(property_id, kind);
         SQL,
+
+        // v4 — dominant colour per photo (instant placeholders while images load)
+        <<<SQL
+        ALTER TABLE property_images ADD COLUMN color TEXT;
+        SQL,
     ];
 }

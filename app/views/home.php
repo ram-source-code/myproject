@@ -66,7 +66,7 @@
 <?php endif; ?>
 
 <?php if ($offices): ?>
-<section class="section container" aria-labelledby="offices-h">
+<section class="section container cv" aria-labelledby="offices-h">
     <div class="section-head">
         <h2 id="offices-h" class="section-title"><?= e(t('top_offices')) ?></h2>
         <a class="link-arrow" href="<?= e(url('offices')) ?>"><?= e(t('view_all')) ?><svg aria-hidden="true"><use href="#i-chevron"></use></svg></a>
@@ -79,7 +79,7 @@
 </section>
 <?php endif; ?>
 
-<section class="section container" aria-labelledby="latest-h">
+<section class="section container cv" aria-labelledby="latest-h">
     <div class="section-head">
         <h2 id="latest-h" class="section-title"><?= e(t('latest_listings')) ?></h2>
         <a class="link-arrow" href="<?= e(url('properties', ['sort' => 'newest'])) ?>"><?= e(t('view_all')) ?><svg aria-hidden="true"><use href="#i-chevron"></use></svg></a>
@@ -99,7 +99,7 @@
     <?php endif; ?>
 </section>
 
-<section class="section container" aria-labelledby="how-h">
+<section class="section container cv" aria-labelledby="how-h">
     <h2 id="how-h" class="section-title"><?= e(t('how_title')) ?></h2>
     <ol class="how-steps">
         <li><svg aria-hidden="true"><use href="#i-search"></use></svg><h3><?= e(t('how_1_t')) ?></h3><p class="muted"><?= e(t('how_1')) ?></p></li>

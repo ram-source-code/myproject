@@ -67,7 +67,7 @@ function load_uploaded_image(array $file, int $minW = 200, int $minH = 150): GdI
     }
 
     $tmp = (string) $file['tmp_name'];
-    if (!is_uploaded_file($tmp) && !defined('AQARAT_CLI')) {
+    if (!is_uploaded_file($tmp) && !defined('AQARAT_CLI') && !defined('AQARAT_SEEDING')) {
         throw new ImageUploadException(t('img_failed'));
     }
 
@@ -147,6 +147,7 @@ function process_image_upload(array $file, ?string $watermark = null): array
 {
     $src = load_uploaded_image($file);
     $phash = image_dhash($src);          // computed on the ORIGINAL so re-uploads of un-watermarked copies still match
+    $color = image_dominant_color($src);
     $dir = config('upload_dir');
     if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
         imagedestroy($src);
@@ -177,7 +178,7 @@ function process_image_upload(array $file, ?string $watermark = null): array
         throw new ImageUploadException(t('img_failed'));
     }
 
-    return ['filename' => $fullName, 'thumb' => $thumbName, 'width' => $fw, 'height' => $fh, 'phash' => $phash];
+    return ['filename' => $fullName, 'thumb' => $thumbName, 'width' => $fw, 'height' => $fh, 'phash' => $phash, 'color' => $color];
 }
 
 function fix_orientation(GdImage $img, string $path): GdImage
@@ -246,6 +247,17 @@ function delete_image_files(array $img): void
             @unlink($dir . '/' . $name);
         }
     }
+}
+
+/** Average colour as #rrggbb (slightly darkened so white text on a placeholder stays readable). */
+function image_dominant_color(GdImage $img): string
+{
+    $px = imagecreatetruecolor(1, 1);
+    imagecopyresampled($px, $img, 0, 0, 0, 0, 1, 1, imagesx($img), imagesy($img));
+    $c = imagecolorat($px, 0, 0);
+    imagedestroy($px);
+    $f = 0.85;
+    return sprintf('#%02x%02x%02x', (int) ((($c >> 16) & 0xFF) * $f), (int) ((($c >> 8) & 0xFF) * $f), (int) (($c & 0xFF) * $f));
 }
 
 /* ───────────── Perceptual hash (dHash) for duplicate-photo detection ───────────── */
@@ -338,7 +350,7 @@ function process_video_upload(array $file): array
         throw new ImageUploadException(in_array($err, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) ? t('video_too_large', ['mb' => $mb]) : t('img_failed'));
     }
     $tmp = (string) $file['tmp_name'];
-    if (!is_uploaded_file($tmp) && !defined('AQARAT_CLI')) {
+    if (!is_uploaded_file($tmp) && !defined('AQARAT_CLI') && !defined('AQARAT_SEEDING')) {
         throw new ImageUploadException(t('img_failed'));
     }
     $size = (int) filesize($tmp);
@@ -354,7 +366,7 @@ function process_video_upload(array $file): array
     }
     $dir = ensure_upload_dir();
     $name = bin2hex(random_bytes(16)) . '.' . ALLOWED_VIDEO_MIME[$mime];
-    $ok = defined('AQARAT_CLI') ? copy($tmp, $dir . '/' . $name) : move_uploaded_file($tmp, $dir . '/' . $name);
+    $ok = (defined('AQARAT_CLI') || defined('AQARAT_SEEDING')) ? copy($tmp, $dir . '/' . $name) : move_uploaded_file($tmp, $dir . '/' . $name);
     if (!$ok) {
         throw new ImageUploadException(t('img_failed'));
     }

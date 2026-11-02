@@ -35,6 +35,9 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
 </div>
 
 <nav class="container quick-chips scroll-x" aria-label="<?= e(t('quick_filters')) ?>">
+    <button type="button" class="qchip qchip-filter" data-open-filters aria-controls="filter-sheet">
+        <svg aria-hidden="true"><use href="#i-filter"></use></svg><?= e(t('filters')) ?><?php if ($activeCount): ?> <span class="badge"><?= $activeCount ?></span><?php endif; ?>
+    </button>
     <a class="qchip" href="<?= e($chip(['purpose' => 'sale'])) ?>"<?= $isOn('purpose', 'sale') ? ' aria-current="true"' : '' ?>><?= e(t('purpose_sale')) ?></a>
     <a class="qchip" href="<?= e($chip(['purpose' => 'rent'])) ?>"<?= $isOn('purpose', 'rent') ? ' aria-current="true"' : '' ?>><?= e(t('purpose_rent')) ?></a>
     <span class="qchip-sep" aria-hidden="true"></span>
@@ -135,11 +138,20 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
             </label>
             <input type="hidden" name="sort" value="<?= e($f['sort']) ?>">
             <div class="filters-actions">
-                <button class="btn btn-primary" type="submit"><?= e(t('apply_filters')) ?></button>
+                <button class="btn btn-primary" type="submit" data-live-count data-endpoint="<?= e(url('api/count')) ?>"><?= e(t('show_n_results', ['n' => number_format($pg['total'])])) ?></button>
                 <a class="btn btn-ghost" href="<?= e(url('properties', $viewMode === 'map' ? ['view' => 'map'] : [])) ?>"><?= e(t('reset')) ?></a>
             </div>
         </form>
     </details>
+
+    <dialog id="filter-sheet" class="sheet" aria-labelledby="sheet-h" closedby="any">
+        <div class="sheet-head">
+            <span class="sheet-grip" aria-hidden="true"></span>
+            <h2 id="sheet-h" class="panel-title"><?= e(t('filters')) ?></h2>
+            <form method="dialog"><button class="icon-btn-plain" aria-label="<?= e(t('close')) ?>"><svg aria-hidden="true"><use href="#i-x"></use></svg></button></form>
+        </div>
+        <div class="sheet-body" data-sheet-body></div>
+    </dialog>
 
     <section aria-labelledby="results-h">
         <h2 id="results-h" class="visually-hidden"><?= e(t('results')) ?></h2>

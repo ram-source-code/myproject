@@ -20,30 +20,20 @@ Languages: **کوردی (Sorani, default)**, العربية and English — RTL/
 | **Saved-search alerts**: "notify me" for any filter combination | Upload **videos** recorded on the phone (MP4/WebM/MOV) | |
 | Report a listing (sold, wrong price, fake, duplicate…) | | |
 
-## Install in a sub-folder (e.g. `public_html/aqarat/` → `example.com/aqarat/`)
+## Install (fully automatic)
 
-1. Upload the whole folder to `public_html/aqarat/`. `index.php` in that folder is the entry point.
-2. Make `data/` and `uploads/` writable by PHP.
-3. Initialise the database. If you have SSH:
+1. Upload the folder to your hosting, e.g. `public_html/aqarat/` → `https://example.com/aqarat/`.
+   `index.php` in that folder is the entry point; any folder name (or the domain root) works.
+2. Open the address in your browser. That's it — the app sets itself up:
+   - creates the SQLite database (WAL mode) and the push-notification keys **with random file names**,
+     and writes them to `data/config.local.php` (no environment variables or SSH needed);
+   - recreates any `.htaccess` protection file your FTP client may have skipped;
+   - redirects every page to a guided **installer** that checks the server (with plain-language fixes for
+     cPanel), asks for language, dinar rate and the admin account, and can **load demo data** with one tick.
+3. When the installer finishes you are logged in as admin. The installer disables itself permanently.
 
-   ```bash
-   cd public_html/aqarat
-   ```
-
-   ```bash
-   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a-strong-password' php bin/seed.php
-   ```
-
-   Add `--demo` to load demo offices and listings.
-
-   **No SSH?** Open `https://example.com/aqarat/install` instead: it checks the server requirements,
-   adds the Kurdistan cities and creates the admin account. The installer disables itself as soon as
-   an admin exists — run it right after uploading.
-4. Open `https://example.com/aqarat/`.
-
-The install folder is **auto-detected**, so the same files also work at the domain root or in any other
-folder. Set `AQARAT_APP_URL=https://example.com/aqarat` if you sit behind a proxy — it is also used
-to build absolute links inside push notifications.
+If `data/` or `uploads/` are not writable, the first page tells you exactly which permission to set (755).
+Command-line alternative: `php bin/seed.php [--demo]` (admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 
 **Apache / cPanel:** the included `.htaccess` files route requests to `index.php` and block access to
 `app/`, `data/`, `bin/`, `tests/`, `deploy/`, `*.md` and `*.sqlite`. `uploads/` never executes code.
@@ -62,6 +52,26 @@ and on `localhost`).
   Expired subscriptions (404/410) are removed automatically.
 - iPhone/iPad: notifications work when the site is **added to the Home Screen** (iOS 16.4+); the site
   shows this hint automatically.
+
+## Design, motion & performance (2026)
+- **Instant navigation:** Speculation Rules prefetch likely next pages on hover/touch and prerender listing,
+  office and city pages (prerenders never inflate view counts — the page reports the view only when shown).
+- **Smooth page changes:** cross-document **View Transitions**; the card photo morphs into the listing hero and
+  back. Everything respects `prefers-reduced-motion`.
+- **No layout shift:** `font-size-adjust: from-font`, reserved image sizes, `rel=expect` render blocking until
+  `<main>` is parsed, and the photo's **dominant colour** (computed at upload) as an instant placeholder.
+- **Less work:** `content-visibility: auto` with intrinsic sizes for off-screen sections, compositor-only
+  scroll-driven reveal animations, brotli/gzip and 1-year immutable caching for hashed assets.
+- **Phone-first:** swipeable scroll-snap photo strip, bottom-sheet filters with a live "Show N results" count,
+  app-style bottom navigation, sticky WhatsApp/call bar, spring micro-interactions, smooth `<details>`.
+- Measured on a throttled mid-range phone (4× CPU, 9 Mbps/80 ms): **LCP ≈ 1.0 s, CLS 0.000** on home,
+  search and listing pages.
+
+## Icons
+All icons are **self-hosted SVG**: [Lucide](https://lucide.dev) (ISC) plus the WhatsApp/Telegram marks from
+Simple Icons (CC0). The full packs live in `bin/icon-pack/` (not web-served); `php bin/build-icons.php` builds
+an inline sprite of only the icons in use (`app/views/partials/icons.php`, ~16 KB) and the few CSS mask icons
+(`assets/icons/`). No icon fonts, no emoji or text glyphs as icons.
 
 ## Self-contained by design
 Everything is served from your own folder: **fonts are self-hosted** (Noto Sans Arabic for Kurdish/Arabic,
@@ -129,7 +139,7 @@ app/             bootstrap, config, db, helpers, image, push, models, routes, co
 assets/          css, js, img (PWA icons), vendor/leaflet
 uploads/         WebP images (generated)
 data/            SQLite database + VAPID keys (generated, protected)
-bin/             seed.php, make-icons.php
+bin/             seed.php, make-icons.php, build-icons.php, icon-pack/ (Lucide + Simple Icons)
 app/fonts/       TTF fonts used by GD for share images (not web-served)
 assets/fonts/    self-hosted web fonts (WOFF2)
 deploy/          nginx + php.ini samples

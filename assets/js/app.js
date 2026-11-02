@@ -53,6 +53,37 @@
         setTimeout(() => t.remove(), 3200);
     }
 
+    /* ---------- Dominant-colour placeholders (computed at upload) ---------- */
+    $$('[data-color]').forEach((n) => { if (/^#[0-9a-f]{6}$/.test(n.dataset.color)) n.style.backgroundColor = n.dataset.color; });
+
+    /* ---------- View transitions: morph the card photo into the listing hero (and back) ---------- */
+    const pathOf = (u) => { try { return decodeURIComponent(new URL(u, location.href).pathname); } catch { return ''; } };
+    const cardImgFor = (path) => $$('.property-card a.stretched-link').find((a) => pathOf(a.href) === path)?.closest('.card')?.querySelector('.card-photo');
+    window.addEventListener('pageswap', (e) => {
+        if (!e.viewTransition || !e.activation?.entry?.url) return;
+        const img = cardImgFor(pathOf(e.activation.entry.url));
+        if (img && !$('.hero-photo')) img.classList.add('vt-hero');
+    });
+    window.addEventListener('pagereveal', (e) => {
+        if (!e.viewTransition || !window.navigation?.activation?.from?.url) return;
+        const img = $('.hero-photo') ? null : cardImgFor(pathOf(navigation.activation.from.url));
+        if (img) {
+            img.classList.add('vt-hero');
+            e.viewTransition.finished.finally(() => img.classList.remove('vt-hero'));
+        }
+    });
+    window.addEventListener('pageshow', () => $$('.vt-hero').forEach((n) => n.classList.remove('vt-hero')));
+
+    /* ---------- Count a listing view only when a prerendered page is actually shown ---------- */
+    const beacon = $('[data-view-beacon]');
+    if (beacon && document.prerendering) {
+        document.addEventListener('prerenderingchange', () => {
+            const fd = new FormData();
+            fd.append('_csrf', CSRF);
+            navigator.sendBeacon?.(beacon.dataset.viewBeacon, fd);
+        }, { once: true });
+    }
+
     /* ---------- Service worker ---------- */
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -269,6 +300,61 @@
             render();
         });
     }
+
+    /* ---------- Mobile photo strip: position counter ---------- */
+    const strip = $('[data-gallery]');
+    const pos = $('[data-gallery-pos]');
+    if (strip && pos && 'IntersectionObserver' in window) {
+        const items = $$('.gallery-item', strip);
+        const io = new IntersectionObserver((entries) => entries.forEach((en) => {
+            if (en.isIntersecting) pos.textContent = String(items.indexOf(en.target) + 1);
+        }), { root: strip, threshold: 0.6 });
+        items.forEach((i) => io.observe(i));
+    }
+
+    /* ---------- Filters: bottom sheet on phones + live "Show N results" ---------- */
+    const filterForm = $('.filters-form');
+    const sheet = $('#filter-sheet');
+    if (filterForm && sheet) {
+        const panel = $('.filters-panel');
+        const body = $('[data-sheet-body]', sheet);
+        const mq = matchMedia('(max-width: 960px)');
+        const place = () => {
+            if (mq.matches && filterForm.parentElement !== body) body.append(filterForm);
+            if (!mq.matches && filterForm.parentElement === body) { if (sheet.open) sheet.close(); panel.append(filterForm); }
+        };
+        place();
+        mq.addEventListener('change', place);
+        $$('[data-open-filters]').forEach((b) => b.addEventListener('click', () => sheet.showModal()));
+    }
+    const liveBtn = $('[data-live-count]');
+    if (filterForm && liveBtn) {
+        let timer = 0, ctrl = null;
+        const update = () => {
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                ctrl?.abort();
+                ctrl = new AbortController();
+                const params = new URLSearchParams(new FormData(filterForm));
+                for (const [k, v] of [...params]) if (v === '') params.delete(k);
+                liveBtn.classList.add('is-counting');
+                try {
+                    const r = await fetch(liveBtn.dataset.endpoint + '?' + params, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+                    const d = await r.json();
+                    if (d.ok) liveBtn.textContent = d.label;
+                } catch { /* aborted or offline */ } finally { liveBtn.classList.remove('is-counting'); }
+            }, 250);
+        };
+        filterForm.addEventListener('input', update);
+        filterForm.addEventListener('change', update);
+    }
+
+    /* ---------- Installer: busy state while demo data is generated ---------- */
+    $$('form[data-install-form]').forEach((f) => f.addEventListener('submit', (e) => {
+        if (e.defaultPrevented) return;
+        const b = $('button[type=submit]', f);
+        if (b) { b.disabled = true; b.lastChild.textContent = b.dataset.busyLabel || b.textContent; }
+    }));
 
     /* ---------- Gallery lightbox ---------- */
     const gallery = $('[data-gallery]');

@@ -11,6 +11,7 @@ const PROPERTY_SELECT = "
            o.id AS office_id, o.name AS office_name, o.slug AS office_slug, o.logo AS office_logo,
            o.is_verified AS office_verified, o.phone AS office_phone, o.whatsapp AS office_whatsapp,
            (SELECT thumb FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_thumb,
+           (SELECT color FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_color,
            (SELECT COUNT(*) FROM property_images i WHERE i.property_id = p.id) AS image_count
     FROM properties p
     LEFT JOIN cities c ON c.id = p.city_id
@@ -249,7 +250,7 @@ function attach_uploaded_images(int $propertyId, array $files): array
     [$count, $maxSort] = $stmt->fetch(PDO::FETCH_NUM);
     $remaining = config('max_images') - (int) $count;
 
-    $ins = db()->prepare('INSERT INTO property_images (property_id, filename, thumb, width, height, sort_order, phash) VALUES (?,?,?,?,?,?,?)');
+    $ins = db()->prepare('INSERT INTO property_images (property_id, filename, thumb, width, height, sort_order, phash, color) VALUES (?,?,?,?,?,?,?,?)');
     $watermark = watermark_for_property($propertyId);
     $added = 0;
     foreach ($files as $file) {
@@ -260,7 +261,7 @@ function attach_uploaded_images(int $propertyId, array $files): array
         }
         try {
             $img = process_image_upload($file, $watermark);
-            $ins->execute([$propertyId, $img['filename'], $img['thumb'], $img['width'], $img['height'], ++$maxSort, $img['phash']]);
+            $ins->execute([$propertyId, $img['filename'], $img['thumb'], $img['width'], $img['height'], ++$maxSort, $img['phash'], $img['color']]);
             $remaining--;
             $added++;
         } catch (ImageUploadException $ex) {
