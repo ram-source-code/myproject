@@ -36,7 +36,11 @@ function create_office(int $userId, string $name, string $phone = ''): int
 {
     db()->prepare('INSERT INTO offices (user_id, name, slug, phone, whatsapp) VALUES (?,?,?,?,?)')
         ->execute([$userId, $name, office_slug($name), $phone, $phone]);
-    return (int) db()->lastInsertId();
+    $id = (int) db()->lastInsertId();
+    if (!defined('AQARAT_SEEDING')) {
+        notify_admins_new_office($id, $name);
+    }
+    return $id;
 }
 
 function offices_index(): void
@@ -193,38 +197,27 @@ function admin_whatsapp(): string
     return valid_phone($n) ? $n : '';
 }
 
-/** Office enters the code the admin sent on WhatsApp. Codes are one-time, bound to this office, and expire. */
-function dash_office_activate(): void
+/** Push "new office waiting" to the admin's own devices (any device where the admin turned on notifications). */
+function notify_admins_new_office(int $officeId, string $name): void
 {
-    $u = require_login();
-    $o = office_for_user((int) $u['id']);
-    if (!$o) {
-        redirect(url('dashboard/office'));
+    try {
+        $subs = db()->query("SELECT s.id, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s
+            JOIN users u ON u.id = s.user_id WHERE u.role = 'admin' AND u.status = 'active'")->fetchAll();
+        if ($subs && function_exists('push_send_many') && vapid_keys()) {
+            $base = absolute_base_url();
+            push_send_many($subs, [
+                'title' => t('new_office_push_title'),
+                'body'  => t('new_office_push_body', ['office' => $name]),
+                'url'   => $base . '/admin/offices',
+                'icon'  => $base . '/assets/img/icon-192.png',
+                'badge' => $base . '/assets/img/badge-72.png',
+                'tag'   => 'office-' . $officeId,
+                'dir'   => 'auto',
+            ]);
+        }
+    } catch (Throwable $e) {
+        error_log('aqarat new-office push: ' . $e->getMessage());     // never block sign-up on a push failure
     }
-    rate_limit('activate', 10, 3600);
-    $hash = activation_code_hash((string) ($_POST['code'] ?? ''));
-    $pdo = db();
-    $pdo->exec('BEGIN IMMEDIATE');
-    $stmt = $pdo->prepare("SELECT id, months FROM activation_codes WHERE code_hash = ? AND office_id = ? AND used_at IS NULL AND expires_at > datetime('now')");
-    $stmt->execute([$hash, $o['id']]);
-    $code = $stmt->fetch();
-    if (!$code) {
-        $pdo->exec('ROLLBACK');
-        with_old([], ['code' => t('activation_bad')]);
-        redirect(url('dashboard/office') . '#activate');
-    }
-    $pdo->prepare("UPDATE activation_codes SET used_at = datetime('now') WHERE id = ?")->execute([$code['id']]);
-    if ($code['months'] === null) {
-        $pdo->prepare("UPDATE offices SET activated_at = datetime('now'), active_until = NULL WHERE id = ?")->execute([$o['id']]);
-    } else {
-        // Renewing early extends from the current end date, so paid time is never lost.
-        $pdo->prepare("UPDATE offices SET activated_at = datetime('now'),
-            active_until = datetime(CASE WHEN active_until > datetime('now') THEN active_until ELSE datetime('now') END, '+' || ? || ' months') WHERE id = ?")
-            ->execute([(int) $code['months'], $o['id']]);
-    }
-    $pdo->exec('COMMIT');
-    flash('success', t('activation_ok'));
-    redirect(url('dashboard/office'));
 }
 
 /* ───────────── Sending notifications (office → followers) ───────────── */

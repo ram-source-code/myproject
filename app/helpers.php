@@ -685,25 +685,3 @@ function can_post_listings(?array $u): bool
 {
     return office_state($u) === 'active';
 }
-
-/** Activation codes: 8 characters from an alphabet without look-alikes (0/O, 1/I/L), shown as XXXX-XXXX. */
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
-function new_activation_code(): string
-{
-    $c = '';
-    for ($i = 0; $i < 8; $i++) {
-        $c .= CODE_ALPHABET[random_int(0, strlen(CODE_ALPHABET) - 1)];
-    }
-    return substr($c, 0, 4) . '-' . substr($c, 4);
-}
-
-function normalize_activation_code(string $raw): string
-{
-    return (string) preg_replace('/[^A-Z0-9]/', '', strtoupper(convert_arabic_digits($raw)));
-}
-
-function activation_code_hash(string $raw): string
-{
-    return hash('sha256', 'aqarat-activation:' . normalize_activation_code($raw));
-}

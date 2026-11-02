@@ -2,7 +2,7 @@
  * Lives in the install folder (e.g. /aqarat/sw.js) so its scope is that folder only. */
 'use strict';
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const SCOPE = new URL(self.registration.scope);           // e.g. https://example.com/aqarat/
 const BASE = SCOPE.pathname.replace(/\/$/, '');            // e.g. /aqarat
 const STATIC = `static-${VERSION}`;
@@ -78,8 +78,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // Private pages: never cached. Use the navigation-preload response when there is one — fetching again would
+    // load the page twice, and the first copy (with its one-time flash message / form errors) would be lost.
     if (req.mode === 'navigate') {
-        event.respondWith(fetch(req).catch(() => caches.match(OFFLINE_URL)));
+        event.respondWith((async () => {
+            try {
+                return (await event.preloadResponse) || (await fetch(req));
+            } catch {
+                return caches.match(OFFLINE_URL);
+            }
+        })());
     }
 });
 

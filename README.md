@@ -7,16 +7,15 @@ and **Web Push notifications** from real-estate offices (نوسینگە) to the 
 **Only real-estate offices post listings, and only after the admin activates them.** Everyone else browses, saves,
 follows offices and contacts them.
 
-**Office activation (paid plans):**
-1. An office registers (or any account picks *Dashboard → Open an office*). It is *waiting for activation*: it can't post,
-   and it isn't shown publicly. Its page has a WhatsApp button to message the admin.
-2. After the office pays, the admin opens **Admin → Offices**, picks the length (1/3/6/12 months or no end date)
-   and taps **Generate code**. The code (e.g. `K7QM-3XPA`) is shown once, with **Send on WhatsApp** (a ready message to the
-   office's number) and **Copy** buttons.
-3. The office enters the code under *My office*. Codes work once, only for that office, and stop working after 14 days.
-   A renewal code adds the months to the current end date, so paying early loses nothing.
-4. When a plan ends the office can't post or send notifications until it enters a new code; its existing listings stay up.
-   **Deactivate** stops an office immediately.
+**Office activation (paid plans) — one tap, nothing to type:**
+1. An office registers (or any account picks *Dashboard → Open an office*). It waits for activation: it can't post and
+   isn't shown publicly. You get a push notification (on any phone where you turned notifications on as admin), and
+   **Admin → Offices** shows a red count. The office has a WhatsApp button to message you.
+2. After they pay: pick the length (1/3/6/12 months or no end date) and tap **Activate**. Then tap **Send on WhatsApp**
+   — a ready message telling them they can post, with the link.
+3. Renewing early adds to the current end date. Offices ending within 7 days are listed first with a
+   **Remind on WhatsApp** button, and the office sees a reminder on its page. When a plan ends the office can't post
+   or notify followers until you tap Activate again; its listings stay up. **Deactivate** stops an office at once.
 
 The admin's WhatsApp number comes from the admin's phone in *Profile* (or set `admin_whatsapp` in `data/config.local.php`).
 No frameworks, no Composer, no build step.

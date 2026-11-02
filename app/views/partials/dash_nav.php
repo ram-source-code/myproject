@@ -26,7 +26,8 @@ $canPost = can_post_listings(current_user());
             <li><a href="<?= e(url('admin/properties')) ?>"<?= $a('admin_listings') ?>><?= e(t('admin_listings')) ?></a></li>
             <li><a href="<?= e(url('admin/users')) ?>"<?= $a('admin_users') ?>><?= e(t('admin_users')) ?></a></li>
             <li><a href="<?= e(url('admin/reports')) ?>"<?= $a('admin_reports') ?>><?= e(t('reports')) ?></a></li>
-            <li><a href="<?= e(url('admin/offices')) ?>"<?= $a('admin_offices') ?>><?= e(t('offices')) ?></a></li>
+            <?php $waiting = (int) db()->query("SELECT COUNT(*) FROM offices WHERE activated_at IS NULL OR (active_until IS NOT NULL AND active_until <= datetime('now'))")->fetchColumn(); ?>
+            <li><a href="<?= e(url('admin/offices')) ?>"<?= $a('admin_offices') ?>><?= e(t('offices')) ?><?php if ($waiting): ?> <span class="count-badge" aria-label="<?= e(t('pending_offices', ['n' => $waiting])) ?>"><?= $waiting ?></span><?php endif; ?></a></li>
             <li><a href="<?= e(url('admin/notifications')) ?>"<?= $a('admin_notifications') ?>><?= e(t('broadcast')) ?></a></li>
             <li><a href="<?= e(url('admin/cities')) ?>"<?= $a('admin_cities') ?>><?= e(t('admin_cities')) ?></a></li>
         <?php endif; ?>

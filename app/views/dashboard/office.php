@@ -6,6 +6,25 @@
             <h1 class="page-title"><?= e($o ? t('my_office') : t('open_office')) ?></h1>
             <?php if ($o): ?><a class="btn btn-outline btn-sm" href="<?= e(url('office/' . $o['id'])) ?>"><svg aria-hidden="true"><use href="#i-eye"></use></svg><?= e(t('view_public_page')) ?></a><?php endif; ?>
         </div>
+        <?php if ($o):
+            $until = $o['active_until'] ? substr((string) $o['active_until'], 0, 10) : null;
+            $daysLeft = $o['active_until'] ? (int) ceil((strtotime($o['active_until'] . ' UTC') - time()) / 86400) : null;
+            $soon = $state === 'active' && $daysLeft !== null && $daysLeft <= 7;
+            $waText = t($state === 'pending' ? 'admin_wa_message' : 'admin_wa_renew', ['office' => $o['name'], 'id' => $o['id']]);
+            $waBtn = $adminWa ? '<a class="btn btn-whatsapp" href="' . e(whatsapp_url($adminWa, $waText)) . '" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg>' . e(t('contact_admin_whatsapp')) . '</a>' : '';
+        ?>
+            <?php if ($state !== 'active'): ?>
+                <section class="panel stack" id="activate" aria-labelledby="act-h">
+                    <h2 id="act-h" class="panel-title"><?= e($state === 'expired' ? t('office_expired_title') : t('office_pending_title')) ?></h2>
+                    <p><?= e($state === 'expired' ? t('office_expired_desc', ['date' => (string) $until]) : t('office_pending_desc')) ?></p>
+                    <?php if ($waBtn): ?><p><?= $waBtn ?></p><?php endif; ?>
+                </section>
+            <?php elseif ($soon): ?>
+                <div class="alert alert-warning"><svg aria-hidden="true"><use href="#i-clock"></use></svg><p><?= e(t('office_ends_soon', ['n' => max(0, $daysLeft), 'date' => (string) $until])) ?></p><?= $waBtn ?></div>
+            <?php elseif ($until): ?>
+                <p class="muted"><svg class="inline-icon" aria-hidden="true"><use href="#i-clock"></use></svg> <?= e(t('office_active_until', ['date' => $until])) ?></p>
+            <?php endif; ?>
+        <?php endif; ?>
         <?php if ($o): ?>
             <dl class="stat-tiles">
                 <div><dt><?= e(t('followers')) ?></dt><dd><?= (int) $o['followers'] ?></dd></div>
@@ -14,35 +33,6 @@
             </dl>
         <?php else: ?>
             <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-alert"></use></svg><p><?= e(t('open_office_desc')) ?></p></div>
-        <?php endif; ?>
-
-        <?php if ($o):
-            ob_start(); ?>
-                <form method="post" action="<?= e(url('dashboard/office/activate')) ?>" class="activation-form" novalidate>
-                    <?= csrf_field() ?>
-                    <div class="field">
-                        <label for="code"><?= e(t('activation_code')) ?></label>
-                        <input id="code" name="code" required maxlength="20" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" dir="ltr" placeholder="XXXX-XXXX"<?= field_aria('code') ?>>
-                        <?= field_error('code') ?>
-                    </div>
-                    <button class="btn btn-primary" type="submit"><svg aria-hidden="true"><use href="#i-key"></use></svg><?= e(t('activate')) ?></button>
-                </form>
-            <?php $codeForm = (string) ob_get_clean(); ?>
-            <?php if ($state !== 'active'): ?>
-                <section class="panel stack" id="activate" aria-labelledby="act-h">
-                    <h2 id="act-h" class="panel-title"><?= e($state === 'expired' ? t('office_expired_title') : t('office_pending_title')) ?></h2>
-                    <p><?= e($state === 'expired' ? t('office_expired_desc', ['date' => substr((string) $o['active_until'], 0, 10)]) : t('office_pending_desc')) ?></p>
-                    <?php if ($adminWa): ?>
-                        <p><a class="btn btn-whatsapp" href="<?= e(whatsapp_url($adminWa, t('admin_wa_message', ['office' => $o['name'], 'id' => $o['id']]))) ?>" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('contact_admin_whatsapp')) ?></a></p>
-                    <?php endif; ?>
-                    <?= $codeForm ?>
-                </section>
-            <?php else: ?>
-                <details class="panel" id="activate"<?= field_error('code') !== '' ? ' open' : '' ?>>
-                    <summary><svg class="inline-icon" aria-hidden="true"><use href="#i-clock"></use></svg> <?= e($o['active_until'] ? t('office_active_until', ['date' => substr((string) $o['active_until'], 0, 10)]) : t('office_status_active')) ?> · <?= e(t('have_renewal_code')) ?></summary>
-                    <?= $codeForm ?>
-                </details>
-            <?php endif; ?>
         <?php endif; ?>
 
         <form method="post" action="<?= e(url('dashboard/office')) ?>" enctype="multipart/form-data" class="panel stack" novalidate data-validate>

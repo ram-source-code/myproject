@@ -1240,3 +1240,7 @@ dialog:modal { overscroll-behavior: contain; }
 .activation-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .activation-form .field { flex: 1 1 220px; margin: 0; }
 .activation-form input { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+.alert:has(.btn) { flex-wrap: wrap; align-items: center; }
+.alert .btn { margin-inline-start: auto; }
+.count-badge { display: inline-grid; place-items: center; min-inline-size: 1.4em; padding: 0 6px; border-radius: 999px; background: #b91c1c; color: #fff; font-size: 0.75rem; font-weight: 700; line-height: 1.5; }
+.code-panel:focus { outline: none; }
