@@ -268,11 +268,11 @@ function back(string $fallback = '/'): never
     redirect(url($fallback));
 }
 
-function abort(int $code, string $message = ''): never
+function abort(int $code, string $message = '', ?string $title = null): never
 {
     http_response_code($code);
     $titles = [400 => t('err_400'), 403 => t('err_403'), 404 => t('err_404'), 405 => t('err_405'), 419 => t('err_419'), 429 => t('err_429'), 500 => t('err_500')];
-    render('error', ['code' => $code, 'title' => $titles[$code] ?? t('err_500'), 'message' => $message]);
+    render('error', ['code' => $code, 'title' => $title ?? $titles[$code] ?? t('err_500'), 'message' => $message]);
     exit;
 }
 
@@ -385,9 +385,9 @@ function verify_csrf(): void
     $token = $_POST['_csrf'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!is_string($token) || !hash_equals(csrf_token(), $token)) {
         if (wants_json()) {
-            json_out(['ok' => false, 'error' => t('err_419')], 419);
+            json_out(['ok' => false, 'error' => t('err_419')], 403);   // 419 is non-standard: Apache turns it into a 500
         }
-        abort(419);
+        abort(403, '', t('err_419'));
     }
 }
 

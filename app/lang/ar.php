@@ -562,4 +562,7 @@ return [
     'ios_step_1' => 'في Safari اضغط زر المشاركة',
     'ios_step_2' => 'مرّر للأسفل واضغط «إضافة إلى الشاشة الرئيسية»',
     'ios_step_3' => 'افتح عقارات من الشاشة الرئيسية واضغط «متابعة» مجدداً',
+    'chk_xampp_ext' => 'افتح :ini واحذف «;» قبل extension=:ext واحفظ، ثم أوقف Apache وشغّله من XAMPP Control Panel.',
+    'chk_xampp_php' => 'ثبّت إصدار XAMPP حديثاً (PHP 8.1 أو أحدث) من apachefriends.org.',
+    'chk_xampp_upload' => 'لفيديوهات الهاتف: في :ini اضبط upload_max_filesize=64M و post_max_size=160M ثم أعد تشغيل Apache من XAMPP Control Panel.',
 ];

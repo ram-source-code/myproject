@@ -51,6 +51,20 @@ function save_local_config(array $changes): bool
     return true;
 }
 
+function is_xampp(): bool
+{
+    return stripos((string) php_ini_loaded_file(), 'xampp') !== false || stripos((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), 'xampp') !== false;
+}
+
+/** Hint for enabling a PHP extension — exact php.ini path and line on XAMPP, cPanel wording elsewhere. */
+function ext_hint(string $ext, string $generic): string
+{
+    if (is_xampp()) {
+        return t('chk_xampp_ext', ['ini' => (string) php_ini_loaded_file(), 'ext' => $ext]);
+    }
+    return $generic;
+}
+
 function install_checks(): array
 {
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1'], true)
@@ -62,14 +76,16 @@ function install_checks(): array
     };
     return [
         // [label, ok, required, hint]
-        ['PHP 8.1+ (' . PHP_VERSION . ')', PHP_VERSION_ID >= 80100, true, t('chk_php')],
-        ['SQLite (WAL: ' . db()->query('PRAGMA journal_mode')->fetchColumn() . ')', strtolower((string) db()->query('PRAGMA journal_mode')->fetchColumn()) === 'wal', true, t('chk_sqlite')],
-        ['GD + WebP', function_exists('imagewebp'), true, t('chk_gd')],
-        ['fileinfo', class_exists('finfo'), true, t('chk_fileinfo')],
-        ['OpenSSL + cURL (push)', function_exists('openssl_pkey_derive') && function_exists('curl_multi_init'), false, t('chk_push')],
+        ['PHP 8.1+ (' . PHP_VERSION . ')', PHP_VERSION_ID >= 80100, true, is_xampp() ? t('chk_xampp_php') : t('chk_php')],
+        ['SQLite (WAL: ' . db()->query('PRAGMA journal_mode')->fetchColumn() . ')', strtolower((string) db()->query('PRAGMA journal_mode')->fetchColumn()) === 'wal', true, ext_hint('pdo_sqlite', t('chk_sqlite'))],
+        ['GD + WebP', function_exists('imagewebp'), true, ext_hint('gd', t('chk_gd'))],
+        ['mbstring', function_exists('mb_strlen'), true, ext_hint('mbstring', t('chk_gd'))],
+        ['fileinfo', class_exists('finfo'), true, ext_hint('fileinfo', t('chk_fileinfo'))],
+        ['OpenSSL + cURL (push)', function_exists('openssl_pkey_derive') && function_exists('curl_multi_init'), false, ext_hint('openssl / extension=curl', t('chk_push'))],
         [t('chk_writable'), is_writable(dirname((string) config('db_path'))) && is_writable((string) config('upload_dir')), true, t('chk_writable_hint')],
         ['HTTPS', $https, false, t('chk_https')],
-        ['upload_max_filesize ≥ 60M (' . ini_get('upload_max_filesize') . ')', $ini('upload_max_filesize') >= 60, false, t('chk_upload')],
+        ['upload_max_filesize ≥ 60M (' . ini_get('upload_max_filesize') . ')', $ini('upload_max_filesize') >= 60, false,
+            is_xampp() ? t('chk_xampp_upload', ['ini' => (string) php_ini_loaded_file()]) : t('chk_upload')],
     ];
 }
 

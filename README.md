@@ -35,6 +35,28 @@ Languages: **کوردی (Sorani, default)**, العربية and English — RTL/
 If `data/` or `uploads/` are not writable, the first page tells you exactly which permission to set (755).
 Command-line alternative: `php bin/seed.php [--demo]` (admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 
+### Local testing with XAMPP (Windows / macOS / Linux)
+1. Install [XAMPP](https://www.apachefriends.org) with **PHP 8.1 or newer** and start **Apache** in the XAMPP Control Panel
+   (MySQL is not needed — the app uses SQLite).
+2. Copy the project folder to `C:\xampp\htdocs\aqarat` (Windows) or `/Applications/XAMPP/htdocs/aqarat` (macOS).
+   Make sure the hidden `.htaccess` files are copied too (the app recreates missing ones automatically).
+3. Open **http://localhost/aqarat/** — the installer appears. Tick *Add demo data* to get offices and listings.
+   If a PHP extension is missing, the installer shows the exact `php.ini` path and the line to change
+   (XAMPP ships with GD, SQLite, cURL, OpenSSL, fileinfo and mbstring enabled).
+4. Optional, for phone videos: in `php.ini` set `upload_max_filesize = 64M` and `post_max_size = 160M`, then
+   Stop/Start Apache.
+
+Notes for local testing:
+- `http://localhost` counts as a secure origin, so the **PWA, service worker and push notifications work locally**
+  in Chrome/Edge/Firefox on the same computer. A phone opening `http://192.168.x.x/aqarat` is *not* a secure
+  origin: browsing works, but install/push need HTTPS (use XAMPP's `https://` with a trusted certificate, or test
+  push on the desktop browser).
+- Windows XAMPP usually has no CA bundle for PHP's cURL; the app uses its bundled Mozilla list
+  (`app/certs/cacert.pem`) automatically, and a bundled `openssl.cnf` so push keys can be generated.
+- macOS XAMPP: if the first page says `data` is not writable, run `chmod -R 777 data uploads` in the app folder.
+- Tested with Apache 2.4 + mod_php using XAMPP's defaults (`AllowOverride All`, mod_rewrite, mod_headers):
+  routing, folder protection, upload sandboxing, compression, caching and video range requests all work.
+
 **Apache / cPanel:** the included `.htaccess` files route requests to `index.php` and block access to
 `app/`, `data/`, `bin/`, `tests/`, `deploy/`, `*.md` and `*.sqlite`. `uploads/` never executes code.
 **nginx:** see `deploy/nginx.conf`. Recommended PHP settings: `deploy/php.ini`.

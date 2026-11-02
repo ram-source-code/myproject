@@ -103,7 +103,7 @@ if have_crypto:
     f = sess(); html = f.get(B + '/office/' + office_id).text; h = {'X-CSRF-Token': meta_tok(html), 'Accept': 'application/json'}
     bad = f.post(B + '/push/follow', json={'office_id': int(office_id), 'subscription': fake_sub('https://127.0.0.1/steal')}, headers=h)
     ok(bad.status_code == 422, 'SSRF: non-push-service endpoint rejected')
-    ok(f.post(B + '/push/follow', json={'office_id': int(office_id), 'subscription': fake_sub('https://fcm.googleapis.com/fcm/send/x')}).status_code == 419, 'follow requires CSRF token')
+    ok(f.post(B + '/push/follow', json={'office_id': int(office_id), 'subscription': fake_sub('https://fcm.googleapis.com/fcm/send/x')}).status_code == 403, 'follow requires CSRF token')
     sub = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-test-' + os.urandom(4).hex())
     r = f.post(B + '/push/follow', json={'office_id': int(office_id), 'subscription': sub}, headers=h).json()
     ok(r.get('following') is True and r.get('followers') == 1, 'device follows office (no account needed)')
@@ -167,7 +167,8 @@ sm = anon.get(B + '/sitemap.xml').text
 ok('<urlset' in sm and f'/property/{pid}-' in sm and '/city/erbil' in sm, 'sitemap lists listings and city pages')
 ok('Property for sale in Erbil' in anon.get(B + '/city/erbil?purpose=sale').text, 'city landing page')
 home = anon.get(B + '/').text
-ok(not re.search(r'(src|href)="https?://(?!127\.0\.0\.1)', home.split('<body')[0]) and 'googleapis' not in home, 'no external fonts/scripts/styles in <head>')
+own = re.escape(re.match(r'https?://[^/]+', B).group(0))
+ok(not re.search(r'<(script|link)[^>]+(src|href)="(?!' + own + r')https?://', home.split('<body')[0]) and 'googleapis' not in home, 'no external fonts/scripts/styles in <head>')
 ok('fonts/noto-sans-arabic-wght.woff2' in anon.get(B + '/assets/css/app.css').text and anon.get(B + '/assets/fonts/noto-sans-arabic-wght.woff2').status_code == 200, 'self-hosted @font-face')
 
 # ── Report a listing
@@ -201,7 +202,8 @@ o.post(B + f'/dashboard/properties/{pid}', data=d2)
 ok(anon.get(B + '/property/' + pid).status_code == 404, 'edited listing returns to review')
 
 # ── CSRF + throttling
-ok(sess().post(B + '/login', data={'email': 'x', 'password': 'y'}).status_code == 419, 'POST without CSRF -> 419')
+r = sess().post(B + '/login', data={'email': 'x', 'password': 'y'})
+ok(r.status_code == 403 and 'session expired' in r.text.lower(), 'POST without CSRF -> 403 "session expired"')
 x = sess()
 for _ in range(6):
     r = x.post(B + '/login', data={'_csrf': tok(x.get(B + '/login').text), 'email': 'office@example.com', 'password': 'wrong'})
