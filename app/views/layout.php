@@ -9,29 +9,84 @@ $useMap = $useMap ?? false;
 <html lang="<?= e(lang()) ?>" dir="<?= e(dir_attr()) ?>">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
     <title><?= e($pageTitle ?? app_name()) ?></title>
     <meta name="description" content="<?= e($metaDesc ?? t('meta_description')) ?>">
+<?php
+    $q = $_GET; unset($q['lang']);
+    $canonical = $seo['canonical'] ?? absolute_origin() . base_path() . current_path() . ($q ? '?' . http_build_query($q) : '');
+    $og = ($seo['og'] ?? []) + [
+        'type' => 'website', 'title' => $pageTitle ?? app_name(), 'description' => $metaDesc ?? t('meta_description'),
+        'image' => absolute_origin() . asset('img/icon-512.png'), 'url' => $canonical,
+    ];
+    $ogLocale = ['ckb' => 'ckb_IQ', 'ar' => 'ar_IQ', 'en' => 'en_US'][lang()];
+?>
+    <link rel="canonical" href="<?= e($canonical) ?>">
+    <?php foreach (seo_alternates() as $hl => $href): ?>
+        <link rel="alternate" hreflang="<?= e($hl) ?>" href="<?= e($href) ?>">
+    <?php endforeach; ?>
+    <meta property="og:site_name" content="<?= e(app_name()) ?>">
+    <meta property="og:locale" content="<?= e($ogLocale) ?>">
+    <meta property="og:type" content="<?= e($og['type']) ?>">
+    <meta property="og:title" content="<?= e($og['title']) ?>">
+    <meta property="og:description" content="<?= e($og['description']) ?>">
+    <meta property="og:url" content="<?= e($og['url']) ?>">
+    <meta property="og:image" content="<?= e($og['image']) ?>">
+    <?php if (!empty($og['image_width'])): ?>
+        <meta property="og:image:width" content="<?= (int) $og['image_width'] ?>">
+        <meta property="og:image:height" content="<?= (int) $og['image_height'] ?>">
+    <?php endif; ?>
+    <meta name="twitter:card" content="<?= !empty($seo['og']) ? 'summary_large_image' : 'summary' ?>">
+    <?php if (!empty($seo['jsonld'])): ?>
+        <script type="application/ld+json"><?= jsonld($seo['jsonld']) ?></script>
+    <?php elseif (current_path() === '/'): ?>
+        <script type="application/ld+json"><?= jsonld([
+            '@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => app_name(), 'url' => absolute_origin() . url('/'),
+            'potentialAction' => ['@type' => 'SearchAction', 'target' => absolute_origin() . base_path() . '/properties?q={search_term_string}', 'query-input' => 'required name=search_term_string'],
+        ]) ?></script>
+    <?php endif; ?>
     <meta name="app-base" content="<?= e(base_path()) ?>">
     <meta name="vapid-key" content="<?= e(vapid_keys()['public']) ?>">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <link rel="manifest" href="<?= e(url('manifest.webmanifest')) ?>">
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
+    <?php foreach (IOS_SPLASH as [$w, $h, $r]): ?>
+        <link rel="apple-touch-startup-image" href="<?= e(asset("img/splash/splash-{$w}x{$h}.png")) ?>" media="(device-width: <?= intdiv($w, $r) ?>px) and (device-height: <?= intdiv($h, $r) ?>px) and (-webkit-device-pixel-ratio: <?= $r ?>) and (orientation: portrait)">
+    <?php endforeach; ?>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="<?= e(app_name()) ?>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap">
-    <?php if ($useMap): ?><link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>"><?php endif; ?>
+    <link rel="preload" href="<?= e(asset('fonts/' . (lang() === 'en' ? 'inter-latin-wght.woff2' : 'noto-sans-arabic-wght.woff2'))) ?>" as="font" type="font/woff2" crossorigin>
+    <?php $useMap = $useMap && maps_enabled(); ?>
+    <?php if ($useMap): ?>
+        <link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>">
+        <link rel="stylesheet" href="<?= e(asset('vendor/markercluster/MarkerCluster.css')) ?>">
+    <?php endif; ?>
     <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
-    <?php if ($useMap): ?><script src="<?= e(asset('vendor/leaflet/leaflet.js')) ?>" defer></script><?php endif; ?>
+    <?php if ($useMap): ?>
+        <script src="<?= e(asset('vendor/leaflet/leaflet.js')) ?>" defer></script>
+        <script src="<?= e(asset('vendor/markercluster/leaflet.markercluster.js')) ?>" defer></script>
+        <meta name="map-tiles" content="<?= e(config('tile_url')) ?>" data-attribution="<?= e(config('tile_attribution')) ?>">
+    <?php endif; ?>
+    <script src="<?= e(asset('js/boot.js')) ?>"></script>
     <script src="<?= e(asset('js/app.js')) ?>" defer></script>
+    <?php /* Hold the first paint (and the view transition) until <main> is parsed: no flash of a half page. */ ?>
+    <link rel="expect" href="#main" blocking="render">
+    <?php
+    // Speculation Rules: prefetch likely next pages on hover/touch, prerender listing and office pages.
+    $b = base_path();
+    $never = array_map(static fn($p) => ['not' => ['href_matches' => "$b/$p*"]], ['dashboard', 'admin', 'logout', 'lang/', 'push', 'api', 'install', 'login', 'register', 'og/', 'uploads/']);
+    $rules = [
+        'prefetch'  => [['where' => ['and' => array_merge([['href_matches' => "$b/*"]], $never, [['not' => ['selector_matches' => '[rel~=nofollow], [target=_blank], [download]']]])], 'eagerness' => 'moderate']],
+        'prerender' => [['where' => ['or' => [['href_matches' => "$b/property/*"], ['href_matches' => "$b/office/*"], ['href_matches' => "$b/city/*"]]], 'eagerness' => 'moderate']],
+    ];
+    ?>
+    <script type="speculationrules"><?= json_encode($rules, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 </head>
 <body class="<?= $user ? 'is-auth' : 'is-guest' ?>">
 <?= render_partial('partials/icons') ?>
@@ -44,12 +99,14 @@ $useMap = $useMap ?? false;
     'unfollowed_toast' => t('unfollowed_toast'), 'news_on' => t('news_on'), 'news_off' => t('news_off'),
     'no_follows' => t('no_follows'), 'no_feed' => t('no_feed'), 'unfollow' => t('unfollow'),
     'view' => t('view'), 'beds_short' => t('beds_short'), 'sqm' => t('sqm'), 'map_empty' => t('map_empty'),
+    'alert_on' => t('alert_on'), 'delete' => t('delete'), 'no_searches' => t('no_searches'),
     'recently_viewed' => t('recently_viewed'), 'clear' => t('reset'), 'offline_now' => t('offline_now'), 'online_now' => t('online_now'),
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <a class="skip-link" href="#main"><?= e(t('skip_to_content')) ?></a>
 
 <header class="site-header">
     <div class="container header-inner">
+        <button type="button" class="app-back" data-app-back hidden aria-label="<?= e(t('back')) ?>"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button>
         <a class="brand" href="<?= e(url('/')) ?>">
             <svg class="brand-mark" aria-hidden="true"><use href="#i-home"></use></svg>
             <span><?= e(app_name()) ?></span>
@@ -183,6 +240,23 @@ $useMap = $useMap ?? false;
     <a href="<?= e(url('offices')) ?>"<?= $navActive('/office') ?>><svg aria-hidden="true"><use href="#i-building"></use></svg><span><?= e(t('offices_short')) ?></span></a>
     <a href="<?= e(url($user ? 'dashboard' : 'login')) ?>"<?= $navActive('/dashboard') ?: $navActive('/login') ?>><svg aria-hidden="true"><use href="#i-user"></use></svg><span><?= e(t('account')) ?></span></a>
 </nav>
+
+<dialog id="ios-install" class="sheet" aria-labelledby="ios-install-h" closedby="any">
+    <div class="sheet-head">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h2 id="ios-install-h" class="panel-title"><?= e(t('ios_install_title')) ?></h2>
+        <form method="dialog"><button class="icon-btn-plain" aria-label="<?= e(t('close')) ?>"><svg aria-hidden="true"><use href="#i-x"></use></svg></button></form>
+    </div>
+    <div class="sheet-body">
+        <p class="muted"><?= e(t('ios_install_why')) ?></p>
+        <ol class="ios-steps">
+            <li><span><?= e(t('ios_step_1')) ?></span><svg aria-hidden="true"><use href="#i-ios-share"></use></svg></li>
+            <li><span><?= e(t('ios_step_2')) ?></span><svg aria-hidden="true"><use href="#i-square-plus"></use></svg></li>
+            <li><span><?= e(t('ios_step_3')) ?></span><svg aria-hidden="true"><use href="#i-smartphone"></use></svg></li>
+        </ol>
+        <form method="dialog"><button class="btn btn-primary btn-block"><?= e(t('got_it')) ?></button></form>
+    </div>
+</dialog>
 
 <dialog id="confirm-dialog" class="dialog dialog-sm" aria-labelledby="confirm-title" closedby="any">
     <form method="dialog">

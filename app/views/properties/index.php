@@ -21,7 +21,8 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
 <div class="container page-head page-head-row">
     <div>
         <h1 class="page-title">
-            <?php if ($f['purpose'] === 'sale'): ?><?= e(t('props_for_sale')) ?>
+            <?php if (!empty($heading)): ?><?= e($heading) ?>
+            <?php elseif ($f['purpose'] === 'sale'): ?><?= e(t('props_for_sale')) ?>
             <?php elseif ($f['purpose'] === 'rent'): ?><?= e(t('props_for_rent')) ?>
             <?php else: ?><?= e(t('nav_listings')) ?><?php endif; ?>
         </h1>
@@ -34,6 +35,9 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
 </div>
 
 <nav class="container quick-chips scroll-x" aria-label="<?= e(t('quick_filters')) ?>">
+    <button type="button" class="qchip qchip-filter" data-open-filters aria-controls="filter-sheet">
+        <svg aria-hidden="true"><use href="#i-filter"></use></svg><?= e(t('filters')) ?><?php if ($activeCount): ?> <span class="badge"><?= $activeCount ?></span><?php endif; ?>
+    </button>
     <a class="qchip" href="<?= e($chip(['purpose' => 'sale'])) ?>"<?= $isOn('purpose', 'sale') ? ' aria-current="true"' : '' ?>><?= e(t('purpose_sale')) ?></a>
     <a class="qchip" href="<?= e($chip(['purpose' => 'rent'])) ?>"<?= $isOn('purpose', 'rent') ? ' aria-current="true"' : '' ?>><?= e(t('purpose_rent')) ?></a>
     <span class="qchip-sep" aria-hidden="true"></span>
@@ -134,11 +138,20 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
             </label>
             <input type="hidden" name="sort" value="<?= e($f['sort']) ?>">
             <div class="filters-actions">
-                <button class="btn btn-primary" type="submit"><?= e(t('apply_filters')) ?></button>
+                <button class="btn btn-primary" type="submit" data-live-count data-endpoint="<?= e(url('api/count')) ?>"><?= e(t('show_n_results', ['n' => number_format($pg['total'])])) ?></button>
                 <a class="btn btn-ghost" href="<?= e(url('properties', $viewMode === 'map' ? ['view' => 'map'] : [])) ?>"><?= e(t('reset')) ?></a>
             </div>
         </form>
     </details>
+
+    <dialog id="filter-sheet" class="sheet" aria-labelledby="sheet-h" closedby="any">
+        <div class="sheet-head">
+            <span class="sheet-grip" aria-hidden="true"></span>
+            <h2 id="sheet-h" class="panel-title"><?= e(t('filters')) ?></h2>
+            <form method="dialog"><button class="icon-btn-plain" aria-label="<?= e(t('close')) ?>"><svg aria-hidden="true"><use href="#i-x"></use></svg></button></form>
+        </div>
+        <div class="sheet-body" data-sheet-body></div>
+    </dialog>
 
     <section aria-labelledby="results-h">
         <h2 id="results-h" class="visually-hidden"><?= e(t('results')) ?></h2>
@@ -151,6 +164,10 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                 <noscript><p class="muted"><?= e(t('map_needs_js')) ?></p></noscript>
             </div>
         <?php else: ?>
+            <div class="results-bar">
+            <button type="button" class="btn btn-outline btn-sm" data-save-search="<?= e(json_encode(compact_filters($f), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>">
+                <svg aria-hidden="true"><use href="#i-bell"></use></svg><span><?= e(t('alert_me')) ?></span>
+            </button>
             <form method="get" action="<?= e(url('properties')) ?>" class="sort-bar" data-autosubmit>
                 <?php foreach ($query as $k => $v): if ($k === 'sort') continue; ?>
                     <input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>">
@@ -163,6 +180,7 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                 </select>
                 <noscript><button class="btn btn-sm btn-outline" type="submit"><?= e(t('apply')) ?></button></noscript>
             </form>
+            </div>
 
             <?php if ($items): ?>
                 <div class="grid-cards">

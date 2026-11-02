@@ -44,7 +44,7 @@
                                     <span class="thumb-empty" aria-hidden="true"><svg><use href="#i-image"></use></svg></span>
                                 <?php endif; ?>
                                 <div>
-                                    <a href="<?= e(url('property/' . $p['id'])) ?>" class="row-title"><?= e($p['title']) ?></a>
+                                    <a href="<?= e(property_url($p)) ?>" class="row-title"><?= e($p['title']) ?></a>
                                     <p class="muted small"><?= e(t('type_' . $p['type'])) ?> · <?= e(city_name($p)) ?> · <?= (int) $p['image_count'] ?> <?= e(t('photos_short')) ?></p>
                                 </div>
                             </div>

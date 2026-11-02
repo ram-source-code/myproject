@@ -25,6 +25,13 @@
         <a class="btn btn-outline btn-sm" href="<?= e(url('offices')) ?>"><svg aria-hidden="true"><use href="#i-building"></use></svg><?= e(t('find_offices')) ?></a>
     </section>
 
+    <section class="panel" aria-labelledby="ss-h">
+        <h2 id="ss-h" class="panel-title"><?= e(t('saved_searches')) ?></h2>
+        <p class="muted small"><?= e(t('saved_searches_desc')) ?></p>
+        <ul class="follow-list" data-search-list aria-live="polite"><li class="muted"><?= e(t('loading')) ?></li></ul>
+        <a class="btn btn-outline btn-sm" href="<?= e(url('properties')) ?>"><svg aria-hidden="true"><use href="#i-search"></use></svg><?= e(t('new_search')) ?></a>
+    </section>
+
     <section class="panel" aria-labelledby="feed-h">
         <h2 id="feed-h" class="panel-title"><?= e(t('recent_notifications')) ?></h2>
         <ul class="notif-list" data-feed aria-live="polite"><li class="muted"><?= e(t('loading')) ?></li></ul>

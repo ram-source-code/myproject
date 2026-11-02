@@ -11,7 +11,9 @@ function admin_home(): void
         (SELECT COUNT(*) FROM properties WHERE status='published') published,
         (SELECT COUNT(*) FROM inquiries) inquiries,
         (SELECT COUNT(*) FROM property_images) images,
-        (SELECT COALESCE(SUM(views),0) FROM properties) views")->fetch();
+        (SELECT COALESCE(SUM(views),0) FROM properties) views,
+        (SELECT COUNT(DISTINCT property_id) FROM reports WHERE status = 'open') reported,
+        (SELECT COUNT(*) FROM duplicate_flags WHERE dismissed = 0) dups")->fetch();
     $byCity = db()->query("SELECT c.name_ar, c.name_en, c.name_ku, COUNT(p.id) n FROM cities c LEFT JOIN properties p ON p.city_id = c.id AND p.status='published'
         GROUP BY c.id ORDER BY n DESC LIMIT 8")->fetchAll();
     $pending = db()->query(PROPERTY_SELECT . " WHERE p.status='pending' ORDER BY p.created_at ASC LIMIT 10")->fetchAll();
@@ -68,7 +70,7 @@ function admin_property_status(int $id): void
     }
     db()->prepare("UPDATE properties SET status = ?, updated_at = datetime('now') WHERE id = ?")->execute([$status, $id]);
     if ($status === 'published' && ($p = find_property($id))) {
-        notify_new_listing($p); // tell the office's followers (once per listing)
+        notify_listing_published($p); // tell the office's followers (once per listing)
     }
     flash('success', t('status_changed'));
     back('/admin/properties');
@@ -205,4 +207,44 @@ function admin_notification_send(): void
         : send_notification((int) $u['id'], null, 'all', $title, $body, $relUrl, $propertyId);
     flash('success', t('push_sent', ['sent' => $res['sent'], 'total' => $res['total']]));
     redirect(url('admin/notifications'));
+}
+
+
+function admin_reports(): void
+{
+    require_admin();
+    $reports = db()->query("SELECT x.*,
+            (SELECT COUNT(*) FROM reports r WHERE r.property_id = x.id AND r.status = 'open') AS open_reports,
+            (SELECT GROUP_CONCAT(reason || CASE WHEN details != '' THEN ': ' || details ELSE '' END, ' | ')
+               FROM (SELECT reason, details FROM reports r WHERE r.property_id = x.id AND r.status = 'open' ORDER BY created_at DESC LIMIT 5)) AS summary
+        FROM (" . PROPERTY_SELECT . " WHERE p.id IN (SELECT property_id FROM reports WHERE status = 'open')) x
+        ORDER BY open_reports DESC LIMIT 200")->fetchAll();
+    $dups = db()->query("SELECT d.*, a.title AS a_title, a.status AS a_status, b.title AS b_title, b.status AS b_status,
+            ua.name AS a_owner, ub.name AS b_owner
+        FROM duplicate_flags d JOIN properties a ON a.id = d.property_id JOIN properties b ON b.id = d.other_id
+        JOIN users ua ON ua.id = a.user_id JOIN users ub ON ub.id = b.user_id
+        WHERE d.dismissed = 0 ORDER BY d.created_at DESC LIMIT 200")->fetchAll();
+    render('admin/reports', ['pageTitle' => t('reports') . ' — ' . app_name(), 'reports' => $reports, 'dups' => $dups, 'active' => 'admin_reports']);
+}
+
+function admin_report_resolve(int $propertyId): void
+{
+    require_admin();
+    if (input('action') === 'unpublish') {
+        db()->prepare("UPDATE properties SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")->execute([$propertyId]);
+    }
+    db()->prepare("UPDATE reports SET status = 'resolved' WHERE property_id = ?")->execute([$propertyId]);
+    flash('success', t('status_changed'));
+    redirect(url('admin/reports'));
+}
+
+function admin_duplicate_dismiss(int $a, int $b): void
+{
+    require_admin();
+    if (input('action') === 'reject') {
+        db()->prepare("UPDATE properties SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")->execute([$a]);
+    }
+    db()->prepare('UPDATE duplicate_flags SET dismissed = 1 WHERE property_id = ? AND other_id = ?')->execute([$a, $b]);
+    flash('success', t('status_changed'));
+    redirect(url('admin/reports') . '#dups');
 }

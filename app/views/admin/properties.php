@@ -32,7 +32,7 @@
                 <?php foreach ($items as $p): ?>
                     <tr>
                         <td data-label="<?= e(t('listing')) ?>">
-                            <a class="row-title" href="<?= e(url('property/' . $p['id'])) ?>"><?= e($p['title']) ?></a>
+                            <a class="row-title" href="<?= e(property_url($p)) ?>"><?= e($p['title']) ?></a>
                             <p class="muted small">#<?= (int) $p['id'] ?> · <?= e(t('type_' . $p['type'])) ?> · <?= e(city_name($p)) ?></p>
                         </td>
                         <td data-label="<?= e(t('owner')) ?>"><?= e($p['owner_name']) ?></td>

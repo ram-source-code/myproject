@@ -53,6 +53,36 @@ function push_news(): void
     json_out(['ok' => true, 'site_news' => (bool) $enabled]);
 }
 
+/** Save the current search as an alert for this device. */
+function push_search_save(): void
+{
+    $in = json_body();
+    $f = compact_filters(search_filters(is_array($in['query'] ?? null) ? $in['query'] : []));
+    try {
+        $sid = upsert_subscription((array) ($in['subscription'] ?? []), current_user()['id'] ?? null);
+    } catch (InvalidArgumentException) {
+        json_out(['ok' => false, 'error' => t('push_unsupported')], 422);
+    }
+    $count = db()->prepare('SELECT COUNT(*) FROM saved_searches WHERE subscription_id = ?');
+    $count->execute([$sid]);
+    if ((int) $count->fetchColumn() >= (int) config('saved_search_limit')) {
+        json_out(['ok' => false, 'error' => t('search_limit', ['n' => config('saved_search_limit')])], 422);
+    }
+    ksort($f);
+    $label = search_label($f);
+    db()->prepare('INSERT OR IGNORE INTO saved_searches (subscription_id, filters, label) VALUES (?,?,?)')
+        ->execute([$sid, json_encode($f, JSON_UNESCAPED_UNICODE), $label]);
+    json_out(['ok' => true, 'label' => $label, 'message' => t('search_saved')]);
+}
+
+function push_search_delete(): void
+{
+    $in = json_body();
+    db()->prepare('DELETE FROM saved_searches WHERE id = ? AND subscription_id = (SELECT id FROM push_subscriptions WHERE endpoint = ?)')
+        ->execute([(int) ($in['id'] ?? 0), (string) ($in['endpoint'] ?? '')]);
+    json_out(['ok' => true]);
+}
+
 /** What does this device follow? Also returns a small feed of recent notifications for the inbox page. */
 function push_status(): void
 {
@@ -77,8 +107,9 @@ function push_status(): void
     $stmt = db()->prepare("SELECT n.title, n.body, n.url, n.created_at FROM notifications n
         WHERE (n.audience = 'followers' AND n.office_id IN (SELECT office_id FROM office_follows WHERE subscription_id = ?))
            OR (n.audience = 'all' AND ? = 1)
-        ORDER BY n.created_at DESC LIMIT 30");
-    $stmt->execute([$sub['id'], (int) $sub['site_news']]);
+           OR (n.audience = 'search' AND n.subscription_id = ?)
+        ORDER BY n.created_at DESC, n.id DESC LIMIT 30");
+    $stmt->execute([$sub['id'], (int) $sub['site_news'], $sub['id']]);
     $feed = array_map(static fn($n) => [
         'title' => $n['title'],
         'body'  => $n['body'],
@@ -86,7 +117,14 @@ function push_status(): void
         'date'  => fmt_date($n['created_at']),
     ], $stmt->fetchAll());
 
-    json_out(['ok' => true, 'subscribed' => true, 'site_news' => (bool) $sub['site_news'], 'offices' => $offices, 'feed' => $feed]);
+    $stmt = db()->prepare('SELECT id, filters, label, hits FROM saved_searches WHERE subscription_id = ? ORDER BY created_at DESC');
+    $stmt->execute([$sub['id']]);
+    $searches = array_map(static function ($s) {
+        $f = json_decode((string) $s['filters'], true) ?: [];
+        return ['id' => (int) $s['id'], 'label' => search_label($f), 'hits' => (int) $s['hits'], 'url' => url('properties', $f)];
+    }, $stmt->fetchAll());
+
+    json_out(['ok' => true, 'subscribed' => true, 'site_news' => (bool) $sub['site_news'], 'offices' => $offices, 'feed' => $feed, 'searches' => $searches]);
 }
 
 function follower_count(int $officeId): int
@@ -125,11 +163,13 @@ function pwa_manifest(): void
         'start_url'        => "$base/?source=pwa",
         'scope'            => "$base/",
         'display'          => 'standalone',
-        'orientation'      => 'portrait',
+        'orientation'      => 'any',              // tablets rotate freely
         'background_color' => '#f6f7f9',
         'theme_color'      => '#0f766e',
         'categories'       => ['lifestyle', 'shopping', 'business'],
         'icons'            => $icons,
+        'display_override' => ['standalone', 'minimal-ui'],
+        'launch_handler'   => ['client_mode' => 'navigate-existing'],
         'shortcuts'        => [
             ['name' => t('nav_buy'), 'url' => "$base/properties?purpose=sale", 'icons' => [['src' => "$base/assets/img/icon-192.png", 'sizes' => '192x192']]],
             ['name' => t('nav_rent'), 'url' => "$base/properties?purpose=rent", 'icons' => [['src' => "$base/assets/img/icon-192.png", 'sizes' => '192x192']]],
@@ -161,7 +201,7 @@ function api_map(): void
         'beds'  => (int) $p['bedrooms'],
         'area'  => (float) $p['area'],
         'type'  => t('type_' . $p['type']),
-        'url'   => url('property/' . $p['id']),
+        'url'   => property_url($p),
         'thumb' => $p['cover_thumb'] ? upload_url($p['cover_thumb']) : null,
     ], $rows)]);
 }

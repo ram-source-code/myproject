@@ -8,6 +8,7 @@ require __DIR__ . '/controllers/admin.php';
 require __DIR__ . '/controllers/offices.php';
 require __DIR__ . '/controllers/pwa.php';
 require __DIR__ . '/controllers/install.php';
+require __DIR__ . '/controllers/seo.php';
 
 /** [method, regex (without delimiters), handler] — numbered groups are passed as int args. */
 function routes(): array
@@ -15,7 +16,7 @@ function routes(): array
     return [
         ['GET',  '/',                                   'home_page'],
         ['GET',  '/properties',                         'properties_index'],
-        ['GET',  '/property/(\d+)',                     'property_show'],
+        ['GET',  '/property/(\d+)(?:-[^/]*)?',          'property_show'],
         ['POST', '/property/(\d+)/inquiry',             'property_inquiry'],
         ['POST', '/favorite/(\d+)',                     'favorite_toggle'],
         ['GET',  '/lang/(ckb|ar|en)',                   'switch_lang'],
@@ -27,8 +28,17 @@ function routes(): array
         ['POST', '/push/news',                          'push_news'],
         ['POST', '/push/status',                        'push_status'],
         ['GET',  '/api/map',                            'api_map'],
+        ['GET',  '/api/count',                          'api_count'],
+        ['POST', '/property/(\d+)/view',                'property_view_beacon'],
         ['GET',  '/manifest.webmanifest',               'pwa_manifest'],
         ['GET',  '/offline',                            'offline_page'],
+        ['POST', '/push/search',                        'push_search_save'],
+        ['POST', '/push/search/delete',                 'push_search_delete'],
+        ['POST', '/property/(\d+)/report',              'property_report'],
+        ['GET',  '/city/([a-z0-9-]+)',                  'city_page'],
+        ['GET',  '/sitemap.xml',                        'sitemap_xml'],
+        ['GET',  '/robots.txt',                         'robots_txt'],
+        ['GET',  '/og/(\d+)\.jpg',                      'og_image'],
         ['GET',  '/install',                            'install_form'],
         ['POST', '/install',                            'install_submit'],
 
@@ -47,6 +57,7 @@ function routes(): array
         ['POST', '/dashboard/properties/(\d+)/sold',    'dash_property_sold'],
         ['POST', '/dashboard/images/(\d+)/delete',      'dash_image_delete'],
         ['POST', '/dashboard/images/(\d+)/cover',       'dash_image_cover'],
+        ['POST', '/dashboard/videos/(\d+)/delete',      'dash_video_delete'],
         ['GET',  '/dashboard/favorites',                'dash_favorites'],
         ['GET',  '/dashboard/inquiries',                'dash_inquiries'],
         ['POST', '/dashboard/inquiries/(\d+)/read',     'dash_inquiry_read'],
@@ -64,6 +75,9 @@ function routes(): array
         ['POST', '/admin/properties/(\d+)/feature',     'admin_property_feature'],
         ['GET',  '/admin/users',                        'admin_users'],
         ['POST', '/admin/users/(\d+)',                  'admin_user_update'],
+        ['GET',  '/admin/reports',                      'admin_reports'],
+        ['POST', '/admin/reports/(\d+)/resolve',        'admin_report_resolve'],
+        ['POST', '/admin/duplicates/(\d+)/(\d+)/dismiss', 'admin_duplicate_dismiss'],
         ['GET',  '/admin/offices',                      'admin_offices'],
         ['POST', '/admin/offices/(\d+)/verify',         'admin_office_verify'],
         ['GET',  '/admin/notifications',                'admin_notifications'],
@@ -83,6 +97,10 @@ function dispatch(string $method, string $path): void
     $path = rtrim($path, '/') ?: '/';
     if ($method === 'HEAD') {
         $method = 'GET';
+    }
+    // Until an administrator exists, every page leads to the guided installer.
+    if (!admin_exists() && !in_array($path, ['/install', '/manifest.webmanifest', '/offline', '/robots.txt'], true)) {
+        redirect(url('install'), 302);
     }
 
     $allowed = [];

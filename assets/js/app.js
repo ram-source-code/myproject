@@ -53,6 +53,40 @@
         setTimeout(() => t.remove(), 3200);
     }
 
+    /* ---------- Dominant-colour placeholders (computed at upload) ---------- */
+    $$('[data-color]').forEach((n) => { if (/^#[0-9a-f]{6}$/.test(n.dataset.color)) n.style.backgroundColor = n.dataset.color; });
+
+    /* ---------- View transitions: morph the card photo into the listing hero (and back) ---------- */
+    const pathOf = (u) => { try { return decodeURIComponent(new URL(u, location.href).pathname); } catch { return ''; } };
+    const cardImgFor = (path) => $$('.property-card a.stretched-link').find((a) => pathOf(a.href) === path)?.closest('.card')?.querySelector('.card-photo');
+    const touch = matchMedia('(pointer: coarse)').matches;
+    window.addEventListener('pageswap', (e) => {
+        if (e.viewTransition && touch && e.activation?.navigationType === 'traverse') { e.viewTransition.skipTransition(); return; }
+        if (!e.viewTransition || !e.activation?.entry?.url) return;
+        const img = cardImgFor(pathOf(e.activation.entry.url));
+        if (img && !$('.hero-photo')) img.classList.add('vt-hero');
+    });
+    window.addEventListener('pagereveal', (e) => {
+        if (e.viewTransition && touch && window.navigation?.activation?.navigationType === 'traverse') { e.viewTransition.skipTransition(); return; }
+        if (!e.viewTransition || !window.navigation?.activation?.from?.url) return;
+        const img = $('.hero-photo') ? null : cardImgFor(pathOf(navigation.activation.from.url));
+        if (img) {
+            img.classList.add('vt-hero');
+            e.viewTransition.finished.finally(() => img.classList.remove('vt-hero'));
+        }
+    });
+    window.addEventListener('pageshow', () => $$('.vt-hero').forEach((n) => n.classList.remove('vt-hero')));
+
+    /* ---------- Count a listing view only when a prerendered page is actually shown ---------- */
+    const beacon = $('[data-view-beacon]');
+    if (beacon && document.prerendering) {
+        document.addEventListener('prerenderingchange', () => {
+            const fd = new FormData();
+            fd.append('_csrf', CSRF);
+            navigator.sendBeacon?.(beacon.dataset.viewBeacon, fd);
+        }, { once: true });
+    }
+
     /* ---------- Service worker ---------- */
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -78,12 +112,14 @@
         $$('[data-install]').forEach((b) => { b.hidden = false; });
         if (banner && !bannerDismissed()) banner.hidden = false;
     });
+    const iosSheet = $('#ios-install');
+    const showIosGuide = () => { if (iosSheet && !iosSheet.open) iosSheet.showModal(); };
     if (isIOS && !isStandalone && banner && !bannerDismissed()) {
-        $('[data-install-text]', banner).textContent = tr('push_ios');
-        $('[data-install]', banner).hidden = true;
+        $$('[data-install]').forEach((b) => { b.hidden = false; });
         banner.hidden = false;
     }
     $$('[data-install]').forEach((b) => b.addEventListener('click', async () => {
+        if (isIOS && !isStandalone) { showIosGuide(); return; }
         if (!deferredPrompt) return;
         deferredPrompt.prompt();
         await deferredPrompt.userChoice.catch(() => {});
@@ -92,6 +128,28 @@
     }));
     $('[data-install-dismiss]')?.addEventListener('click', () => { store.set('installDismissed', Date.now()); banner.hidden = true; });
     window.addEventListener('appinstalled', () => { if (banner) banner.hidden = true; });
+
+    /* ---------- Installed app: back button (iOS/Android standalone have no browser chrome) ---------- */
+    const backBtn = $('[data-app-back]');
+    if (backBtn && isStandalone) {
+        const atHome = location.pathname.replace(/\/$/, '') === BASE;
+        backBtn.hidden = atHome;
+        backBtn.addEventListener('click', () => {
+            const fromHere = document.referrer && new URL(document.referrer).origin === location.origin;
+            if (fromHere && history.length > 1) history.back(); else location.href = BASE + '/';
+        });
+    }
+
+    /* ---------- On-screen keyboard: hide fixed bottom bars while typing (iOS ignores interactive-widget) ---------- */
+    if (window.visualViewport && matchMedia('(pointer: coarse)').matches) {
+        const vv = window.visualViewport;
+        const check = () => {
+            const typing = document.activeElement?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select');
+            document.documentElement.classList.toggle('kb-open', Boolean(typing) && window.innerHeight - vv.height > 150);
+        };
+        vv.addEventListener('resize', check);
+        document.addEventListener('focusout', () => setTimeout(check, 50));
+    }
 
     /* ---------- Header menus (<details>) ---------- */
     const menus = $$('details.menu');
@@ -270,6 +328,61 @@
         });
     }
 
+    /* ---------- Mobile photo strip: position counter ---------- */
+    const strip = $('[data-gallery]');
+    const pos = $('[data-gallery-pos]');
+    if (strip && pos && 'IntersectionObserver' in window) {
+        const items = $$('.gallery-item', strip);
+        const io = new IntersectionObserver((entries) => entries.forEach((en) => {
+            if (en.isIntersecting) pos.textContent = String(items.indexOf(en.target) + 1);
+        }), { root: strip, threshold: 0.6 });
+        items.forEach((i) => io.observe(i));
+    }
+
+    /* ---------- Filters: bottom sheet on phones + live "Show N results" ---------- */
+    const filterForm = $('.filters-form');
+    const sheet = $('#filter-sheet');
+    if (filterForm && sheet) {
+        const panel = $('.filters-panel');
+        const body = $('[data-sheet-body]', sheet);
+        const mq = matchMedia('(max-width: 960px)');
+        const place = () => {
+            if (mq.matches && filterForm.parentElement !== body) body.append(filterForm);
+            if (!mq.matches && filterForm.parentElement === body) { if (sheet.open) sheet.close(); panel.append(filterForm); }
+        };
+        place();
+        mq.addEventListener('change', place);
+        $$('[data-open-filters]').forEach((b) => b.addEventListener('click', () => sheet.showModal()));
+    }
+    const liveBtn = $('[data-live-count]');
+    if (filterForm && liveBtn) {
+        let timer = 0, ctrl = null;
+        const update = () => {
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                ctrl?.abort();
+                ctrl = new AbortController();
+                const params = new URLSearchParams(new FormData(filterForm));
+                for (const [k, v] of [...params]) if (v === '') params.delete(k);
+                liveBtn.classList.add('is-counting');
+                try {
+                    const r = await fetch(liveBtn.dataset.endpoint + '?' + params, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+                    const d = await r.json();
+                    if (d.ok) liveBtn.textContent = d.label;
+                } catch { /* aborted or offline */ } finally { liveBtn.classList.remove('is-counting'); }
+            }, 250);
+        };
+        filterForm.addEventListener('input', update);
+        filterForm.addEventListener('change', update);
+    }
+
+    /* ---------- Installer: busy state while demo data is generated ---------- */
+    $$('form[data-install-form]').forEach((f) => f.addEventListener('submit', (e) => {
+        if (e.defaultPrevented) return;
+        const b = $('button[type=submit]', f);
+        if (b) { b.disabled = true; b.lastChild.textContent = b.dataset.busyLabel || b.textContent; }
+    }));
+
     /* ---------- Gallery lightbox ---------- */
     const gallery = $('[data-gallery]');
     const lb = $('#lightbox');
@@ -347,7 +460,12 @@
         return reg ? reg.pushManager.getSubscription() : null;
     }
     async function ensureSub() {
-        if (!pushSupported) throw new Error(isIOS && !isStandalone ? tr('push_ios') : tr('push_unsupported'));
+        if (isIOS && !isStandalone) {
+            // iOS only allows web push for apps added to the Home Screen: show the 3-step guide.
+            showIosGuide();
+            throw Object.assign(new Error(''), { silent: true });
+        }
+        if (!pushSupported) throw new Error(tr('push_unsupported'));
         const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
         if (perm !== 'granted') throw new Error(tr('push_denied'));
         const reg = await navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' });
@@ -400,7 +518,7 @@
                     toast(tr('followed_toast'));
                 }
             } catch (err) {
-                toast(err.message && err.message !== 'request' ? err.message : tr('push_unsupported'));
+                if (!err.silent) toast(err.message && err.message !== 'request' ? err.message : tr('push_unsupported'));
             } finally {
                 btn.disabled = false;
             }
@@ -413,11 +531,11 @@
         const list = $('[data-follow-list]', center);
         const feed = $('[data-feed]', center);
         const news = $('[data-news-toggle]', center);
-        if (!pushSupported) {
+        if (!pushSupported || (isIOS && !isStandalone)) {
             const w = $('[data-push-unsupported]', center);
             w.hidden = false;
             if (isIOS && !isStandalone) $('[data-push-unsupported-text]', w).textContent = tr('push_ios');
-            news.disabled = true;
+            news.disabled = !(isIOS && !isStandalone);   // on iOS the toggle opens the install guide
         }
         const paint = (st) => {
             news.checked = Boolean(st.site_news);
@@ -438,6 +556,24 @@
                         el('span', { text: o.name })),
                     unf));
             });
+            const sl = $('[data-search-list]', center);
+            if (sl) {
+                sl.replaceChildren();
+                if (!st.searches?.length) sl.append(el('li', { class: 'muted', text: tr('no_searches') }));
+                (st.searches || []).forEach((q) => {
+                    const del = el('button', { type: 'button', class: 'btn btn-ghost btn-sm text-danger', text: tr('delete') });
+                    del.addEventListener('click', async () => {
+                        const sub = await currentSub();
+                        await postJSON('/push/search/delete', { id: q.id, endpoint: sub ? sub.endpoint : '' }).catch(() => {});
+                        statusPromise = null;
+                        paint(await getStatus());
+                    });
+                    sl.append(el('li', {},
+                        el('a', { href: q.url, class: 'follow-item' }, icon('search'), el('span', { text: q.label }),
+                            q.hits ? el('span', { class: 'badge', text: String(q.hits) }) : null),
+                        del));
+                });
+            }
             feed.replaceChildren();
             if (!st.feed?.length) feed.append(el('li', { class: 'muted', text: tr('no_feed') }));
             (st.feed || []).forEach((n) => feed.append(el('li', {},
@@ -462,19 +598,52 @@
                 paint(await getStatus());
             } catch (err) {
                 news.checked = !news.checked;
-                toast(err.message);
+                if (!err.silent) toast(err.message);
             } finally {
                 news.disabled = !pushSupported;
             }
         });
     }
 
-    /* ---------- Maps (Leaflet, self-hosted; OSM tiles) ---------- */
+    /* ---------- Save the current search as a push alert ---------- */
+    $$('[data-save-search]').forEach((btn) => btn.addEventListener('click', async () => {
+        let query = {};
+        try { query = JSON.parse(btn.dataset.saveSearch || '{}'); } catch { /* ignore */ }
+        btn.disabled = true;
+        try {
+            const sub = await ensureSub();
+            const r = await postJSON('/push/search', { query, subscription: sub.toJSON() });
+            btn.setAttribute('aria-pressed', 'true');
+            $('span', btn).textContent = tr('alert_on');
+            toast(r.message + ' — ' + r.label);
+        } catch (err) {
+            if (!err.silent) toast(err.data?.error || (err.message !== 'request' ? err.message : tr('push_unsupported')));
+        } finally { btn.disabled = false; }
+    }));
+
+    /* ---------- Video upload: client-side size check ---------- */
+    $$('[data-video-input]').forEach((inp) => inp.addEventListener('change', () => {
+        const max = Number(inp.dataset.maxBytes);
+        const out = inp.closest('.field')?.querySelector('[data-video-status]');
+        const big = [...inp.files].filter((f) => f.size > max).map((f) => f.name);
+        const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
+        if (out) out.textContent = [...inp.files].map((f) => `${f.name} (${mb(f.size)})`).join(' · ') + (big.length ? ' — ' + tr('file_too_big', { name: big.join(', ') }) : '');
+        inp.setCustomValidity(big.length ? tr('file_too_big', { name: big.join(', ') }) : '');
+    }));
+
+    /* ---------- Maps (Leaflet + markercluster, self-hosted JS; configurable tile server) ---------- */
     const hasLeaflet = () => typeof window.L !== 'undefined';
-    const tileLayer = () => window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    });
+    const tilesMeta = document.querySelector('meta[name="map-tiles"]');
+    const tileLayer = () => {
+        const layer = window.L.tileLayer(tilesMeta?.content || '', { maxZoom: 19, attribution: '' });
+        layer.getAttribution = () => null;   // attribution text is added safely below (no HTML injection)
+        return layer;
+    };
+    const addAttribution = (map) => {
+        const txt = tilesMeta?.dataset.attribution;
+        map.attributionControl.setPrefix(false);
+        if (txt) map.attributionControl.getContainer().append(document.createTextNode(txt));
+    };
     const parseCenter = (s) => (s || '36.1911,44.0092').split(',').map(Number);
 
     // Results map with price pins
@@ -482,6 +651,16 @@
     if (resultsMap && hasLeaflet()) {
         const map = window.L.map(resultsMap, { scrollWheelZoom: true }).setView(parseCenter(resultsMap.dataset.center), 12);
         tileLayer().addTo(map);
+        addAttribution(map);
+        const group = typeof window.L.markerClusterGroup === 'function'
+            ? window.L.markerClusterGroup({
+                showCoverageOnHover: false,
+                maxClusterRadius: 50,
+                // getChildCount() is an integer, so this markup cannot carry user content
+                iconCreateFunction: (c) => window.L.divIcon({ className: 'cluster-pin', html: `<span>${Number(c.getChildCount())}</span>`, iconSize: [44, 44] }),
+            })
+            : window.L.layerGroup();
+        map.addLayer(group);
         fetch(resultsMap.dataset.endpoint, { headers: { Accept: 'application/json' } })
             .then((r) => r.json())
             .then(({ items = [] }) => {
@@ -492,8 +671,9 @@
                 const bounds = [];
                 items.forEach((p) => {
                     const pin = window.L.divIcon({ className: 'price-pin', html: '', iconSize: null });
-                    const m = window.L.marker([p.lat, p.lng], { icon: pin, title: p.title, keyboard: true }).addTo(map);
-                    m.getElement()?.append(el('span', { text: p.short }));
+                    const m = window.L.marker([p.lat, p.lng], { icon: pin, title: p.title, keyboard: true });
+                    m.on('add', () => { const n = m.getElement(); if (n && !n.firstChild) n.append(el('span', { text: p.short })); });
+                    group.addLayer(m);
                     const card = el('a', { class: 'map-card', href: p.url },
                         p.thumb ? el('img', { src: p.thumb, alt: '', width: 220, height: 147 }) : null,
                         el('strong', { class: 'map-card-price', text: p.price }),
@@ -513,6 +693,7 @@
         const pos = [Number(mini.dataset.lat), Number(mini.dataset.lng)];
         const map = window.L.map(mini, { scrollWheelZoom: false, dragging: !matchMedia('(pointer: coarse)').matches }).setView(pos, 15);
         tileLayer().addTo(map);
+        addAttribution(map);
         window.L.marker(pos, { icon: window.L.divIcon({ className: 'dot-pin', iconSize: [22, 22] }), keyboard: false }).addTo(map);
     }
 
@@ -524,10 +705,12 @@
         const start = has ? [Number(lat.value), Number(lng.value)] : parseCenter(picker.dataset.center);
         const map = window.L.map(picker).setView(start, has ? 16 : 12);
         tileLayer().addTo(map);
+        addAttribution(map);
         let marker = null;
         const place = (ll) => {
             if (!marker) {
-                marker = window.L.marker(ll, { draggable: true, icon: window.L.divIcon({ className: 'dot-pin', iconSize: [22, 22] }) }).addTo(map);
+                marker = window.L.marker(ll, { draggable: true, title: picker.getAttribute('aria-label') || '', icon: window.L.divIcon({ className: 'dot-pin', iconSize: [22, 22] }) }).addTo(map);
+                marker.getElement()?.setAttribute('aria-label', picker.getAttribute('aria-label') || 'pin');
                 marker.on('dragend', () => place(marker.getLatLng()));
             }
             marker.setLatLng(ll);

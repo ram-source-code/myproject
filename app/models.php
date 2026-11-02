@@ -11,6 +11,7 @@ const PROPERTY_SELECT = "
            o.id AS office_id, o.name AS office_name, o.slug AS office_slug, o.logo AS office_logo,
            o.is_verified AS office_verified, o.phone AS office_phone, o.whatsapp AS office_whatsapp,
            (SELECT thumb FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_thumb,
+           (SELECT color FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_color,
            (SELECT COUNT(*) FROM property_images i WHERE i.property_id = p.id) AS image_count
     FROM properties p
     LEFT JOIN cities c ON c.id = p.city_id
@@ -249,7 +250,9 @@ function attach_uploaded_images(int $propertyId, array $files): array
     [$count, $maxSort] = $stmt->fetch(PDO::FETCH_NUM);
     $remaining = config('max_images') - (int) $count;
 
-    $ins = db()->prepare('INSERT INTO property_images (property_id, filename, thumb, width, height, sort_order) VALUES (?,?,?,?,?,?)');
+    $ins = db()->prepare('INSERT INTO property_images (property_id, filename, thumb, width, height, sort_order, phash, color) VALUES (?,?,?,?,?,?,?,?)');
+    $watermark = watermark_for_property($propertyId);
+    $added = 0;
     foreach ($files as $file) {
         $name = mb_substr(basename((string) ($file['name'] ?? '')), 0, 60);
         if ($remaining <= 0) {
@@ -257,8 +260,99 @@ function attach_uploaded_images(int $propertyId, array $files): array
             break;
         }
         try {
-            $img = process_image_upload($file);
-            $ins->execute([$propertyId, $img['filename'], $img['thumb'], $img['width'], $img['height'], ++$maxSort]);
+            $img = process_image_upload($file, $watermark);
+            $ins->execute([$propertyId, $img['filename'], $img['thumb'], $img['width'], $img['height'], ++$maxSort, $img['phash'], $img['color']]);
+            $remaining--;
+            $added++;
+        } catch (ImageUploadException $ex) {
+            $errors[] = $name . ': ' . $ex->getMessage();
+        }
+    }
+    if ($added) {
+        detect_duplicates($propertyId);
+    }
+    return $errors;
+}
+
+/** Office logo of the listing owner, or the site icon, used as photo watermark. */
+function watermark_for_property(int $propertyId): string
+{
+    $stmt = db()->prepare('SELECT o.logo FROM properties p JOIN offices o ON o.user_id = p.user_id WHERE p.id = ?');
+    $stmt->execute([$propertyId]);
+    $logo = (string) $stmt->fetchColumn();
+    if ($logo !== '' && preg_match('/^[a-f0-9]{32}\.webp$/', $logo) && is_file(config('upload_dir') . '/' . $logo)) {
+        return config('upload_dir') . '/' . $logo;
+    }
+    return dirname(__DIR__) . '/assets/img/icon-192.png';
+}
+
+/**
+ * Flag listings that look like copies of another one:
+ *  - any photo within Hamming distance ≤ 4 of a photo on a different listing, or
+ *  - same purpose/type with near-identical coordinates (≈30 m) and price within 5 %.
+ */
+function detect_duplicates(int $propertyId): int
+{
+    $pdo = db();
+    $mine = $pdo->prepare('SELECT phash FROM property_images WHERE property_id = ? AND phash IS NOT NULL');
+    $mine->execute([$propertyId]);
+    $hashes = $mine->fetchAll(PDO::FETCH_COLUMN);
+    $found = [];
+    if ($hashes) {
+        $others = $pdo->prepare("SELECT i.property_id, i.phash FROM property_images i JOIN properties p ON p.id = i.property_id
+            WHERE i.property_id != ? AND i.phash IS NOT NULL AND p.status != 'rejected'");
+        $others->execute([$propertyId]);
+        foreach ($others as $row) {
+            foreach ($hashes as $h) {
+                $d = hash_distance($h, $row['phash']);
+                if ($d <= 4 && (!isset($found[$row['property_id']]) || $d < $found[$row['property_id']][1])) {
+                    $found[(int) $row['property_id']] = ['photo', $d];
+                }
+            }
+        }
+    }
+    $p = $pdo->prepare('SELECT * FROM properties WHERE id = ?');
+    $p->execute([$propertyId]);
+    $p = $p->fetch();
+    if ($p && $p['lat'] !== null) {
+        $near = $pdo->prepare("SELECT id FROM properties WHERE id != ? AND status != 'rejected' AND purpose = ? AND type = ?
+            AND ABS(lat - ?) < 0.0003 AND ABS(lng - ?) < 0.0003 AND ABS(price_usd - ?) <= MAX(1, ? * 0.05)");
+        $near->execute([$propertyId, $p['purpose'], $p['type'], $p['lat'], $p['lng'], $p['price_usd'], $p['price_usd']]);
+        foreach ($near->fetchAll(PDO::FETCH_COLUMN) as $oid) {
+            $found[(int) $oid] ??= ['location', 0];
+        }
+    }
+    $ins = $pdo->prepare('INSERT OR IGNORE INTO duplicate_flags (property_id, other_id, reason, distance) VALUES (?,?,?,?)');
+    foreach ($found as $oid => [$reason, $d]) {
+        $ins->execute([$propertyId, $oid, $reason, $d]);
+    }
+    return count($found);
+}
+
+function property_videos(int $propertyId): array
+{
+    $stmt = db()->prepare('SELECT * FROM property_videos WHERE property_id = ? ORDER BY id');
+    $stmt->execute([$propertyId]);
+    return $stmt->fetchAll();
+}
+
+/** @return string[] error messages */
+function attach_uploaded_videos(int $propertyId, array $files): array
+{
+    $errors = [];
+    $stmt = db()->prepare('SELECT COUNT(*) FROM property_videos WHERE property_id = ?');
+    $stmt->execute([$propertyId]);
+    $remaining = (int) config('max_videos') - (int) $stmt->fetchColumn();
+    $ins = db()->prepare('INSERT INTO property_videos (property_id, filename, mime, size) VALUES (?,?,?,?)');
+    foreach ($files as $file) {
+        $name = mb_substr(basename((string) ($file['name'] ?? '')), 0, 60);
+        if ($remaining <= 0) {
+            $errors[] = t('video_limit', ['n' => config('max_videos')]);
+            break;
+        }
+        try {
+            $v = process_video_upload($file);
+            $ins->execute([$propertyId, $v['filename'], $v['mime'], $v['size']]);
             $remaining--;
         } catch (ImageUploadException $ex) {
             $errors[] = $name . ': ' . $ex->getMessage();
@@ -269,6 +363,9 @@ function attach_uploaded_images(int $propertyId, array $files): array
 
 function delete_property(int $id): void
 {
+    foreach (property_videos($id) as $v) {
+        delete_video_file($v);
+    }
     $imgs = property_images($id);
     db()->prepare('DELETE FROM properties WHERE id = ?')->execute([$id]);
     foreach ($imgs as $img) {

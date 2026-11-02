@@ -42,6 +42,7 @@ function dash_property_new(): void
         'useMap'    => true,
         'p'         => null,
         'images'    => [],
+        'videos'    => [],
         'active'    => 'new',
     ]);
 }
@@ -72,8 +73,11 @@ function dash_property_create(): void
     foreach (attach_uploaded_images($id, $files) as $msg) {
         flash('error', $msg);
     }
+    foreach (attach_uploaded_videos($id, normalize_files($_FILES['videos'] ?? null)) as $msg) {
+        flash('error', $msg);
+    }
     if ($status === 'published' && ($p = find_property($id))) {
-        notify_new_listing($p);
+        notify_listing_published($p);
     }
     clear_old();
     flash('success', $status === 'pending' ? t('listing_pending') : t('listing_created'));
@@ -98,6 +102,7 @@ function dash_property_edit(int $id): void
         'useMap'    => true,
         'p'         => $p,
         'images'    => property_images($id),
+        'videos'    => property_videos($id),
         'active'    => 'listings',
     ]);
 }
@@ -127,6 +132,9 @@ function dash_property_update(int $id): void
             $d['year_built'], $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status, $id]);
 
     foreach (attach_uploaded_images($id, normalize_files($_FILES['images'] ?? null)) as $msg) {
+        flash('error', $msg);
+    }
+    foreach (attach_uploaded_videos($id, normalize_files($_FILES['videos'] ?? null)) as $msg) {
         flash('error', $msg);
     }
     clear_old();
@@ -279,4 +287,21 @@ function dash_password_update(): void
     login_user((int) $u['id']); // new session id
     flash('success', t('password_saved'));
     redirect(url('dashboard/profile'));
+}
+
+
+function dash_video_delete(int $videoId): void
+{
+    require_login();
+    $stmt = db()->prepare('SELECT * FROM property_videos WHERE id = ?');
+    $stmt->execute([$videoId]);
+    $v = $stmt->fetch();
+    if (!$v) {
+        abort(404);
+    }
+    owned_property_or_404((int) $v['property_id']);
+    db()->prepare('DELETE FROM property_videos WHERE id = ?')->execute([$videoId]);
+    delete_video_file($v);
+    flash('success', t('video_deleted'));
+    redirect(url('dashboard/properties/' . $v['property_id'] . '/edit') . '#videos');
 }
