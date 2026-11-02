@@ -112,7 +112,7 @@ function render_partial(string $view, array $data = []): string
 function redirect(string $to, int $code = 303): never
 {
     // Only allow local redirects to prevent open-redirect abuse.
-    if (!str_starts_with($to, '/') || str_starts_with($to, '//')) {
+    if (!str_starts_with($to, '/') || str_starts_with($to, '//') || str_starts_with($to, '/\\') || preg_match('/[\r\n]/', $to)) {
         $to = url('/');
     }
     header('Location: ' . $to, true, $code);

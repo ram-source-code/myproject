@@ -140,7 +140,7 @@ code { font-size: 0.9em; background: var(--surface-2); padding: 0.1em 0.4em; bor
 .btn-ghost { --_bg: transparent; --_bd: transparent; }
 .btn-ghost:hover { --_bg: var(--surface-2); }
 .btn-ghost[aria-current="page"] { --_bg: var(--brand-soft); --_fg: var(--brand-strong); }
-.btn-danger { --_bg: var(--danger); --_fg: #fff; --_bd: var(--danger); }
+.btn-danger { --_bg: #b91c1c; --_fg: #fff; --_bd: #b91c1c; } /* fixed shade: 6.5:1 with white in both themes */
 .btn-light { --_bg: #fff; --_fg: #0f172a; --_bd: #fff; }
 .btn-sm { min-block-size: 36px; padding: 0.35em 0.9em; font-size: 0.875rem; }
 .btn-lg { min-block-size: 52px; padding: 0.7em 1.6em; font-size: 1.05rem; }
@@ -519,13 +519,13 @@ dialog:modal { overscroll-behavior: contain; }
 .dash-nav a { display: block; padding: 10px 14px; border-radius: 10px; color: var(--text); text-decoration: none; font-weight: 500; }
 .dash-nav a:hover { background: var(--surface-2); }
 .dash-nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand-strong); font-weight: 700; }
-.dash-nav-sep { block-size: 1px; background: var(--border); margin: 6px 8px; }
+.dash-nav-sep { border-block-start: 1px solid var(--border); margin-block-start: 6px; padding-block-start: 6px; }
 @media (max-width: 960px) {
     .dash-layout { grid-template-columns: 1fr; }
     .dash-nav { position: static; overflow-x: auto; }
     .dash-nav ul { display: flex; }
     .dash-nav a { white-space: nowrap; }
-    .dash-nav-sep { inline-size: 1px; block-size: auto; margin: 6px; }
+    .dash-nav-sep { border-block-start: 0; border-inline-start: 1px solid var(--border); margin: 0; padding: 0 0 0 0; padding-inline-start: 6px; }
 }
 
 .stat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-block: 8px 20px; }

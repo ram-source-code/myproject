@@ -110,7 +110,7 @@ function dash_property_update(int $id): void
 
     // Substantive edits by non-admins send a published listing back to review.
     $status = $p['status'];
-    if (config('require_approval') && $u['role'] !== 'admin' && $status === 'rejected') {
+    if (config('require_approval') && $u['role'] !== 'admin' && in_array($status, ['published', 'rejected'], true)) {
         $status = 'pending';
     }
 
@@ -125,7 +125,7 @@ function dash_property_update(int $id): void
         flash('error', $msg);
     }
     clear_old();
-    flash('success', t('listing_updated'));
+    flash('success', $status === 'pending' && $p['status'] !== 'pending' ? t('listing_pending') : t('listing_updated'));
     redirect(url("dashboard/properties/$id/edit"));
 }
 
