@@ -3,7 +3,7 @@
     <?= render_partial('partials/dash_nav', ['active' => $active]) ?>
     <div class="dash-main narrow">
         <div class="section-head">
-            <h1 class="page-title"><?= e(t('my_office')) ?></h1>
+            <h1 class="page-title"><?= e($o ? t('my_office') : t('open_office')) ?></h1>
             <?php if ($o): ?><a class="btn btn-outline btn-sm" href="<?= e(url('office/' . $o['id'])) ?>"><svg aria-hidden="true"><use href="#i-eye"></use></svg><?= e(t('view_public_page')) ?></a><?php endif; ?>
         </div>
         <?php if ($o): ?>
@@ -13,7 +13,7 @@
                 <div><dt><?= e(t('verified')) ?></dt><dd><svg class="stat-icon<?= $o['is_verified'] ? ' is-yes' : '' ?>" aria-hidden="true"><use href="#i-<?= $o['is_verified'] ? 'verified' : 'minus' ?>"></use></svg><span class="visually-hidden"><?= e($o['is_verified'] ? t('yes') : t('no')) ?></span></dd></div>
             </dl>
         <?php else: ?>
-            <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-alert"></use></svg><p><?= e(t('create_office_first')) ?></p></div>
+            <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-alert"></use></svg><p><?= e(t('open_office_desc')) ?></p></div>
         <?php endif; ?>
 
         <form method="post" action="<?= e(url('dashboard/office')) ?>" enctype="multipart/form-data" class="panel stack" novalidate data-validate>

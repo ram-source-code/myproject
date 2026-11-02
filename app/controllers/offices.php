@@ -85,6 +85,17 @@ function office_show(int $id): void
 
 /* ───────────── Office dashboard ───────────── */
 
+/** Gate for adding a listing: no office → send them to set one up (any account can open an office). */
+function require_poster(): array
+{
+    $u = require_login();
+    if (!can_post_listings($u)) {
+        flash('info', t('only_offices_post'));
+        redirect(url('dashboard/office'));
+    }
+    return $u;
+}
+
 function require_office_user(): array
 {
     $u = require_login();
@@ -97,7 +108,7 @@ function require_office_user(): array
 
 function dash_office(): void
 {
-    $u = require_office_user();
+    $u = require_login();
     $o = office_for_user((int) $u['id']);
     render('dashboard/office', [
         'pageTitle' => t('my_office') . ' — ' . app_name(),
@@ -109,7 +120,7 @@ function dash_office(): void
 
 function dash_office_save(): void
 {
-    $u = require_office_user();
+    $u = require_login();
     $d = [
         'name'     => mb_substr(input('name'), 0, 100),
         'about'    => mb_substr(input('about'), 0, 2000),
@@ -139,6 +150,9 @@ function dash_office_save(): void
     if (!$o) {
         create_office((int) $u['id'], $d['name']);
         $o = office_for_user((int) $u['id']);
+        if ($u['role'] === 'user') {      // an individual opening an office becomes an office account
+            db()->prepare("UPDATE users SET role = 'agent' WHERE id = ?")->execute([$u['id']]);
+        }
     }
     db()->prepare('UPDATE offices SET name=?, about=?, phone=?, whatsapp=?, address=?, city_id=? WHERE id=?')
         ->execute([$d['name'], $d['about'], $d['phone'], $d['whatsapp'], $d['address'], $d['city_id'], $o['id']]);

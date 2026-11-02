@@ -660,3 +660,18 @@ function run_maintenance(): void
         error_log('aqarat maintenance: ' . $e->getMessage());
     }
 }
+
+/** Only real-estate offices (نوسینگەکان) publish listings. Lives here so error pages can render the layout early. */
+function can_post_listings(?array $u): bool
+{
+    static $cache = [];
+    if (!$u) {
+        return false;
+    }
+    if (!isset($cache[$u['id']])) {
+        $stmt = db()->prepare('SELECT 1 FROM offices WHERE user_id = ? LIMIT 1');
+        $stmt->execute([(int) $u['id']]);
+        $cache[$u['id']] = (bool) $stmt->fetchColumn();
+    }
+    return $cache[$u['id']];
+}

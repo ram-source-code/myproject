@@ -147,11 +147,21 @@ if have_crypto:
 other = sess()
 html = other.get(B + '/register').text; t = tok(html); human()
 other.post(B + '/register', data={'_csrf': t, '_ft': ft(html), 'name': 'Other', 'email': 'other@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
-ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
+r = other.get(B + '/dashboard/properties/new')
+ok(r.url.endswith('/dashboard/office') and 'Only real estate offices' in r.text, 'individuals cannot add listings (sent to open an office)')
+r = other.post(B + '/dashboard/properties', data={'_csrf': meta_tok(r.text), 'title': 'Private house for sale', 'purpose': 'sale', 'type': 'house', 'price': '1000', 'currency': 'USD', 'city_id': '1'})
+ok(r.url.endswith('/dashboard/office') and 'Private house for sale' not in other.get(B + '/dashboard/favorites').text, 'individual POST of a listing refused')
+ok(other.get(B + f'/dashboard/properties/{pid}/edit').url.endswith('/dashboard/office'), 'individual cannot open the listing editor')
+ok(other.get(B + '/dashboard').url.endswith('/dashboard/favorites'), 'customer dashboard opens saved listings')
 ok(other.get(B + '/admin').status_code == 403, 'non-admin blocked from /admin')
 r = other.get(B + '/dashboard/notifications')
 ok('/dashboard/notifications' not in r.url or 'real estate office accounts' in r.text, 'regular users cannot send notifications')
-ok(other.post(B + '/dashboard/notifications', data={'_csrf': meta_tok(r.text), 'title': 'spam', 'body': 'spam spam'}).url.endswith('/dashboard'), 'regular user POST to notify redirected')
+ok(other.post(B + '/dashboard/notifications', data={'_csrf': meta_tok(r.text), 'title': 'spam', 'body': 'spam spam'}).url.split('?')[0].rstrip('/').rsplit('/', 1)[-1] in ('dashboard', 'favorites'), 'regular user POST to notify redirected')
+# An individual can open an office; then the IDOR check still applies to someone else's listing.
+r = other.get(B + '/dashboard/office')
+r = other.post(B + '/dashboard/office', data={'_csrf': tok(r.text), 'name': 'Other Realty', 'about': '', 'phone': '', 'whatsapp': '', 'address': '', 'city_id': '1'})
+ok('Other Realty' in r.text and other.get(B + '/dashboard/properties/new').url.endswith('/dashboard/properties/new'), 'individual opened an office and may now post')
+ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
 
 # ── Admin approves → auto notification once
 a = sess(); r = login(a, 'admin@aqarat.local', ADMIN_PW); ok('/dashboard' in r.url, 'admin login')
@@ -289,7 +299,7 @@ d = sess(); html = d.get(B + '/register').text; human()
 d.post(B + '/register', data={'_csrf': tok(html), '_ft': ft(html), 'name': 'Temp', 'email': 'temp@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
 html = d.get(B + '/dashboard/profile').text
 r = d.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'wrong'})
-ok('Delete my account' in r.text and login(sess(), 'temp@example.com', 'secret123').url.endswith('/dashboard'), 'delete account needs the right password')
+ok('Delete my account' in r.text and '/dashboard' in login(sess(), 'temp@example.com', 'secret123').url, 'delete account needs the right password')
 html = o.get(B + '/dashboard/profile').text
 r = o.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'secret123'})
 ok(r.url.rstrip('/').endswith(PREFIX) and (photo is None or anon.get(B.rsplit(PREFIX, 1)[0] + photo).status_code == 404)

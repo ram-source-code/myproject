@@ -2,16 +2,23 @@
 $active = $active ?? '';
 $a = static fn(string $k) => $active === $k ? ' aria-current="page"' : '';
 $isAdmin = is_admin();
+$canPost = can_post_listings(current_user());
 ?>
 <nav class="dash-nav" aria-label="<?= e(t('dashboard_nav')) ?>">
     <ul>
-        <li><a href="<?= e(url('dashboard')) ?>"<?= $a('listings') ?>><?= e(t('my_listings')) ?></a></li>
-        <li><a href="<?= e(url('dashboard/properties/new')) ?>"<?= $a('new') ?>><?= e(t('add_listing')) ?></a></li>
-        <li><a href="<?= e(url('dashboard/inquiries')) ?>"<?= $a('inquiries') ?>><?= e(t('inquiries')) ?></a></li>
+        <?php if ($canPost || $isAdmin): ?>
+            <li><a href="<?= e(url('dashboard')) ?>"<?= $a('listings') ?>><?= e(t('my_listings')) ?></a></li>
+        <?php endif; ?>
+        <?php if ($canPost): ?>
+            <li><a href="<?= e(url('dashboard/properties/new')) ?>"<?= $a('new') ?>><?= e(t('add_listing')) ?></a></li>
+            <li><a href="<?= e(url('dashboard/inquiries')) ?>"<?= $a('inquiries') ?>><?= e(t('inquiries')) ?></a></li>
+        <?php endif; ?>
         <li><a href="<?= e(url('dashboard/favorites')) ?>"<?= $a('favorites') ?>><?= e(t('favorites')) ?></a></li>
-        <?php if (in_array(current_user()['role'] ?? '', ['agent', 'admin'], true)): ?>
+        <?php if ($canPost): ?>
             <li><a href="<?= e(url('dashboard/office')) ?>"<?= $a('office') ?>><?= e(t('my_office')) ?></a></li>
             <li><a href="<?= e(url('dashboard/notifications')) ?>"<?= $a('notifications') ?>><?= e(t('send_notification')) ?></a></li>
+        <?php else: ?>
+            <li><a href="<?= e(url('dashboard/office')) ?>"<?= $a('office') ?>><?= e(t('open_office')) ?></a></li>
         <?php endif; ?>
         <li><a href="<?= e(url('dashboard/profile')) ?>"<?= $a('profile') ?>><?= e(t('profile')) ?></a></li>
         <?php if ($isAdmin): ?>

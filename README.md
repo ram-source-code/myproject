@@ -3,6 +3,9 @@
 A property marketplace for **Kurdistan** in plain **PHP 8.1+, HTML, CSS and vanilla JS**:
 **SQLite (WAL mode)**, a **GD pipeline that converts every upload to WebP**, an **installable PWA**,
 and **Web Push notifications** from real-estate offices (نوسینگە) to the people who follow them.
+
+**Only real-estate offices post listings.** Everyone else browses, saves, follows offices and contacts them; any account
+can become an office from *Dashboard → Open an office*.
 No frameworks, no Composer, no build step.
 
 Languages: **کوردی (Sorani, default)**, العربية and English — RTL/LTR handled automatically.

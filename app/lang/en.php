@@ -611,4 +611,7 @@ return [
     'download_backup' => 'Download backup',
     'audit_log' => 'Admin activity',
     'nothing_logged' => 'No admin actions yet.',
+    'only_offices_post' => 'Only real estate offices can post listings. Open an office to start posting.',
+    'open_office' => 'Open an office',
+    'open_office_desc' => 'Only real estate offices post listings. Fill in this form to turn your account into an office account.',
 ];

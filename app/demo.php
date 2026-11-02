@@ -190,7 +190,7 @@ function seed_demo_data(int $adminId): void
         $feats = array_rand(array_flip(PROPERTY_FEATURES), mt_rand(3, 7));
         $age = '-' . mt_rand(0, 45) . ' days';
         $owners = $officeUsers[$cityEn] ?? $officeUsers['Erbil'];
-        $owner = ($i % 7 === 6) ? $adminId : $owners[$i % count($owners)];
+        $owner = $owners[$i % count($owners)];   // only offices post listings
         $insP->execute([
             $owner, $cityId($cityEn), strtr($title, [':b' => $beds ?: 3, ':d' => $d, ':a' => $area, ':p' => $proj ?: $d]), $desc, $purpose, $type, $d,
             '', $proj, $price, $currency, to_usd($price, $currency), $purpose === 'rent' ? 'monthly' : null, $deed,

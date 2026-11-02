@@ -3,7 +3,7 @@
     <div class="dash-main">
         <div class="section-head">
             <h1 class="page-title"><?= e(is_admin() ? t('all_listings') : t('my_listings')) ?></h1>
-            <a class="btn btn-primary" href="<?= e(url('dashboard/properties/new')) ?>"><svg aria-hidden="true"><use href="#i-plus"></use></svg><?= e(t('add_listing')) ?></a>
+            <?php if (can_post_listings(current_user())): ?><a class="btn btn-primary" href="<?= e(url('dashboard/properties/new')) ?>"><svg aria-hidden="true"><use href="#i-plus"></use></svg><?= e(t('add_listing')) ?></a><?php endif; ?>
         </div>
 
         <dl class="stat-tiles">
