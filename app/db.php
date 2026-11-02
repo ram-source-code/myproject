@@ -382,5 +382,11 @@ function migrations(): array
         );
         CREATE INDEX idx_admin_log ON admin_log(created_at);
         SQL,
+        // v6 — offices post only after the admin activates them (after payment); existing offices stay active
+        <<<'SQL'
+        ALTER TABLE offices ADD COLUMN activated_at TEXT;
+        ALTER TABLE offices ADD COLUMN active_until TEXT;
+        UPDATE offices SET activated_at = datetime('now');
+        SQL,
     ];
 }

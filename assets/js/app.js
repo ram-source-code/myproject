@@ -225,6 +225,13 @@
         } catch { /* cancelled */ }
     }));
 
+    /* ---------- Copy to clipboard (activation codes) ---------- */
+    $$('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copy); toast(tr('copied')); }
+        catch { window.prompt('', b.dataset.copy); }      // older browsers / insecure origin: select-and-copy fallback
+    }));
+    $('[data-autofocus]')?.focus();
+
     /* ---------- Password show/hide ---------- */
     $$('[data-pw-toggle]').forEach((b) => b.addEventListener('click', () => {
         const input = document.getElementById(b.getAttribute('aria-controls'));

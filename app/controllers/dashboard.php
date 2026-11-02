@@ -4,6 +4,13 @@ declare(strict_types=1);
 function dashboard_home(): void
 {
     $u = require_login();
+    if ($u['role'] !== 'admin' && !can_post_listings($u)) {
+        $has = db()->prepare('SELECT 1 FROM properties WHERE user_id = ? LIMIT 1');
+        $has->execute([$u['id']]);
+        if (!$has->fetchColumn()) {          // customers: saved listings; offices awaiting activation: their office page
+            redirect(url(office_state($u) === 'none' ? 'dashboard/favorites' : 'dashboard/office'));
+        }
+    }
     $where = $u['role'] === 'admin' ? '1=1' : 'p.user_id = ?';
     $args = $u['role'] === 'admin' ? [] : [$u['id']];
     $status = in_array($_GET['status'] ?? '', PROPERTY_STATUSES, true) ? $_GET['status'] : '';
@@ -36,7 +43,7 @@ function dashboard_home(): void
 
 function dash_property_new(): void
 {
-    require_login();
+    require_poster();
     render('dashboard/form', [
         'pageTitle' => t('add_listing') . ' — ' . app_name(),
         'useMap'    => true,
@@ -49,7 +56,7 @@ function dash_property_new(): void
 
 function dash_property_create(): void
 {
-    $u = require_login();
+    $u = require_poster();
     [$d, $errors] = validate_property_input($_POST);
     $files = normalize_files($_FILES['images'] ?? null);
     if (count($files) > config('max_images')) {
@@ -95,7 +102,9 @@ function owned_property_or_404(int $id): array
 
 function dash_property_edit(int $id): void
 {
-    require_login();
+    if (!is_admin()) {               // admins may still moderate any listing
+        require_poster();
+    }
     $p = owned_property_or_404($id);
     render('dashboard/form', [
         'pageTitle' => t('edit_listing') . ' — ' . app_name(),
@@ -109,7 +118,7 @@ function dash_property_edit(int $id): void
 
 function dash_property_update(int $id): void
 {
-    $u = require_login();
+    $u = is_admin() ? require_login() : require_poster();
     $p = owned_property_or_404($id);
     [$d, $errors] = validate_property_input($_POST);
     if ($errors) {

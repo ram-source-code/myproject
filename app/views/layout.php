@@ -93,7 +93,7 @@ $useMap = $useMap ?? false;
 <body class="<?= $user ? 'is-auth' : 'is-guest' ?>">
 <?= render_partial('partials/icons') ?>
 <script type="application/json" id="i18n"><?= json_encode([
-    'show' => t('show'), 'hide' => t('hide'), 'link_copied' => t('link_copied'),
+    'show' => t('show'), 'hide' => t('hide'), 'link_copied' => t('link_copied'), 'copied' => t('copied'),
     'files_selected' => t('files_selected'), 'file_too_big' => t('file_too_big'), 'too_many_files' => t('too_many_files'),
     'v_password_match' => t('v_password_match'),
     'follow' => t('follow'), 'following' => t('following'), 'push_denied' => t('push_denied'),
@@ -140,20 +140,25 @@ $useMap = $useMap ?? false;
             <a class="icon-link" href="<?= e(url('notifications')) ?>"<?= $navActive('/notifications') ?> aria-label="<?= e(t('notifications')) ?>">
                 <svg aria-hidden="true"><use href="#i-bell"></use></svg>
             </a>
+            <?php $canPost = can_post_listings($user); ?>
             <?php if ($user): ?>
+                <?php if ($canPost): ?>
                 <a class="btn btn-primary btn-sm hide-sm" href="<?= e(url('dashboard/properties/new')) ?>">
                     <svg aria-hidden="true"><use href="#i-plus"></use></svg><?= e(t('add_listing')) ?>
                 </a>
+                <?php endif; ?>
                 <details class="menu account-menu">
                     <summary class="btn btn-ghost btn-sm" aria-label="<?= e(t('account')) ?>">
                         <span class="avatar avatar-sm" aria-hidden="true"><?= e(mb_substr($user['name'], 0, 1)) ?></span>
                         <span class="hide-sm"><?= e(str_limit($user['name'], 18)) ?></span>
                     </summary>
                     <ul class="menu-list">
-                        <li><a href="<?= e(url('dashboard')) ?>"><?= e(t('my_listings')) ?></a></li>
-                        <?php if (in_array($user['role'], ['agent', 'admin'], true)): ?>
+                        <?php if ($canPost || $user['role'] === 'admin'): ?><li><a href="<?= e(url('dashboard')) ?>"><?= e(t('my_listings')) ?></a></li><?php endif; ?>
+                        <?php if (office_state($user) !== 'none'): ?>
                             <li><a href="<?= e(url('dashboard/office')) ?>"><?= e(t('my_office')) ?></a></li>
-                            <li><a href="<?= e(url('dashboard/notifications')) ?>"><?= e(t('send_notification')) ?></a></li>
+                            <?php if ($canPost): ?><li><a href="<?= e(url('dashboard/notifications')) ?>"><?= e(t('send_notification')) ?></a></li><?php endif; ?>
+                        <?php else: ?>
+                            <li><a href="<?= e(url('dashboard/office')) ?>"><?= e(t('open_office')) ?></a></li>
                         <?php endif; ?>
                         <li><a href="<?= e(url('dashboard/favorites')) ?>"><?= e(t('favorites')) ?></a></li>
                         <li><a href="<?= e(url('dashboard/profile')) ?>"><?= e(t('profile')) ?></a></li>
@@ -243,7 +248,7 @@ $useMap = $useMap ?? false;
 <nav class="bottom-nav" aria-label="<?= e(t('app_nav')) ?>">
     <a href="<?= e(url('/')) ?>"<?= $navActive('/') ?>><svg aria-hidden="true"><use href="#i-home"></use></svg><span><?= e(t('nav_home')) ?></span></a>
     <a href="<?= e(url('properties')) ?>"<?= $navActive('/propert') ?>><svg aria-hidden="true"><use href="#i-search"></use></svg><span><?= e(t('search')) ?></span></a>
-    <a href="<?= e(url($user ? 'dashboard/properties/new' : 'register')) ?>" class="bottom-nav-add"><svg aria-hidden="true"><use href="#i-plus"></use></svg><span><?= e(t('add_short')) ?></span></a>
+    <a href="<?= e($canPost ? url('dashboard/properties/new') : ($user ? url('dashboard/office') : url('register', ['type' => 'office']))) ?>" class="bottom-nav-add"><svg aria-hidden="true"><use href="#i-plus"></use></svg><span><?= e(t('add_short')) ?></span></a>
     <a href="<?= e(url('offices')) ?>"<?= $navActive('/office') ?>><svg aria-hidden="true"><use href="#i-building"></use></svg><span><?= e(t('offices_short')) ?></span></a>
     <a href="<?= e(url($user ? 'dashboard' : 'login')) ?>"<?= $navActive('/dashboard') ?: $navActive('/login') ?>><svg aria-hidden="true"><use href="#i-user"></use></svg><span><?= e(t('account')) ?></span></a>
 </nav>

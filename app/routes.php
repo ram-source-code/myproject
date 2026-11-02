@@ -88,6 +88,8 @@ function routes(): array
         ['POST', '/admin/duplicates/(\d+)/(\d+)/dismiss', 'admin_duplicate_dismiss'],
         ['GET',  '/admin/offices',                      'admin_offices'],
         ['POST', '/admin/offices/(\d+)/verify',         'admin_office_verify'],
+        ['POST', '/admin/offices/(\d+)/activate',       'admin_office_activate'],
+        ['POST', '/admin/offices/(\d+)/deactivate',     'admin_office_deactivate'],
         ['GET',  '/admin/notifications',                'admin_notifications'],
         ['POST', '/admin/notifications',                'admin_notification_send'],
         ['GET',  '/admin/cities',                       'admin_cities'],

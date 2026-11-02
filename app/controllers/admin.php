@@ -165,8 +165,15 @@ function admin_city_delete(int $id): void
 function admin_offices(): void
 {
     require_admin();
-    $rows = db()->query(OFFICE_SELECT . ' ORDER BY o.created_at DESC LIMIT 500')->fetchAll();
-    render('admin/offices', ['pageTitle' => t('offices') . ' — ' . app_name(), 'items' => $rows, 'active' => 'admin_offices']);
+    // What needs you first: waiting for activation, ended, ending soon — then everyone else, newest first.
+    $rows = db()->query(OFFICE_SELECT . " ORDER BY CASE
+            WHEN o.activated_at IS NULL THEN 0
+            WHEN o.active_until IS NOT NULL AND o.active_until <= datetime('now') THEN 1
+            WHEN o.active_until IS NOT NULL AND o.active_until <= datetime('now', '+" . RENEW_SOON_DAYS . " days') THEN 2
+            ELSE 3 END, o.active_until, o.created_at DESC LIMIT 500")->fetchAll();
+    $done = $_SESSION['_activated'] ?? null;
+    unset($_SESSION['_activated']);
+    render('admin/offices', ['pageTitle' => t('offices') . ' — ' . app_name(), 'items' => $rows, 'done' => $done, 'active' => 'admin_offices']);
 }
 
 function admin_office_verify(int $id): void
@@ -175,6 +182,56 @@ function admin_office_verify(int $id): void
     db()->prepare('UPDATE offices SET is_verified = 1 - is_verified WHERE id = ?')->execute([$id]);
     admin_log('office.verify', "#$id");
     flash('success', t('status_changed'));
+    redirect(url('admin/offices'));
+}
+
+const ACTIVATION_MONTHS = [1, 3, 6, 12];     // plus 0 = no end date
+const RENEW_SOON_DAYS = 7;                    // offices ending within this many days are listed (and warned) first
+
+/** One tap after the office pays: activate (or extend) it, then offer a ready WhatsApp message telling them. */
+function admin_office_activate(int $id): void
+{
+    require_admin();
+    $o = find_office($id) ?? abort(404);
+    $months = (int) input('months');
+    $months = in_array($months, ACTIVATION_MONTHS, true) ? $months : null;
+    if ($months === null) {
+        db()->prepare("UPDATE offices SET activated_at = COALESCE(activated_at, datetime('now')), active_until = NULL WHERE id = ?")->execute([$id]);
+    } else {
+        // Extends from the current end date when renewing early, so paid time is never lost.
+        db()->prepare("UPDATE offices SET activated_at = COALESCE(activated_at, datetime('now')),
+            active_until = datetime(CASE WHEN active_until > datetime('now') THEN active_until ELSE datetime('now') END, '+' || ? || ' months') WHERE id = ?")
+            ->execute([$months, $id]);
+    }
+    admin_log('office.activate', "#$id " . ($months ? "{$months}m" : 'no end'));
+    $o = find_office($id);
+    $until = $o['active_until'] ? substr($o['active_until'], 0, 10) : null;
+    $message = t($until ? 'activated_message_until' : 'activated_message', [
+        'app' => app_name(), 'office' => $o['name'], 'date' => (string) $until, 'url' => absolute_base_url() . '/dashboard/properties/new',
+    ]);
+    $phone = office_contact_phone($o);
+    $_SESSION['_activated'] = ['office' => $o['name'], 'until' => $until, 'message' => $message, 'wa' => $phone ? whatsapp_url($phone, $message) : null];
+    redirect(url('admin/offices'));
+}
+
+/** Best number to reach an office owner on WhatsApp. */
+function office_contact_phone(array $o): string
+{
+    $phone = ($o['whatsapp'] ?? '') ?: ($o['phone'] ?? '');
+    if ($phone === '') {
+        $st = db()->prepare('SELECT phone FROM users WHERE id = ?');
+        $st->execute([$o['user_id']]);
+        $phone = (string) $st->fetchColumn();
+    }
+    return valid_phone($phone) ? $phone : '';
+}
+
+function admin_office_deactivate(int $id): void
+{
+    require_admin();
+    db()->prepare('UPDATE offices SET activated_at = NULL, active_until = NULL WHERE id = ?')->execute([$id]);
+    admin_log('office.deactivate', "#$id");
+    flash('success', t('office_deactivated'));
     redirect(url('admin/offices'));
 }
 

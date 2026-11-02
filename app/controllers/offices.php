@@ -36,14 +36,18 @@ function create_office(int $userId, string $name, string $phone = ''): int
 {
     db()->prepare('INSERT INTO offices (user_id, name, slug, phone, whatsapp) VALUES (?,?,?,?,?)')
         ->execute([$userId, $name, office_slug($name), $phone, $phone]);
-    return (int) db()->lastInsertId();
+    $id = (int) db()->lastInsertId();
+    if (!defined('AQARAT_SEEDING')) {
+        notify_admins_new_office($id, $name);
+    }
+    return $id;
 }
 
 function offices_index(): void
 {
     $q = mb_substr(trim((string) ($_GET['q'] ?? '')), 0, 80);
     $city = input_int('city', null, $_GET);
-    $where = ['1=1'];
+    $where = ['o.activated_at IS NOT NULL'];
     $args = [];
     if ($q !== '') {
         $where[] = "o.name LIKE ? ESCAPE '\\'";
@@ -66,8 +70,8 @@ function offices_index(): void
 function office_show(int $id): void
 {
     $o = find_office($id);
-    if (!$o) {
-        abort(404);
+    if (!$o || ($o['activated_at'] === null && !is_admin() && (int) ($o['user_id']) !== (int) (current_user()['id'] ?? 0))) {
+        abort(404);                       // not public until the admin activates it
     }
     $f = search_filters($_GET);
     $f['office'] = $id;
@@ -85,6 +89,18 @@ function office_show(int $id): void
 
 /* ───────────── Office dashboard ───────────── */
 
+/** Gate for adding a listing: no office → send them to set one up (any account can open an office). */
+function require_poster(): array
+{
+    $u = require_login();
+    $state = office_state($u);
+    if ($state !== 'active') {
+        flash('info', t($state === 'none' ? 'only_offices_post' : ($state === 'expired' ? 'office_expired_short' : 'office_pending_short')));
+        redirect(url('dashboard/office'));
+    }
+    return $u;
+}
+
 function require_office_user(): array
 {
     $u = require_login();
@@ -92,24 +108,30 @@ function require_office_user(): array
         flash('info', t('office_only'));
         redirect(url('dashboard'));
     }
+    if ($u['role'] !== 'admin' && !can_post_listings($u)) {     // notifying followers is part of the paid plan too
+        flash('info', t(office_state($u) === 'expired' ? 'office_expired_short' : 'office_pending_short'));
+        redirect(url('dashboard/office'));
+    }
     return $u;
 }
 
 function dash_office(): void
 {
-    $u = require_office_user();
+    $u = require_login();
     $o = office_for_user((int) $u['id']);
     render('dashboard/office', [
         'pageTitle' => t('my_office') . ' — ' . app_name(),
         'o'         => $o,
         'u'         => $u,
+        'state'     => office_state($u),
+        'adminWa'   => admin_whatsapp(),
         'active'    => 'office',
     ]);
 }
 
 function dash_office_save(): void
 {
-    $u = require_office_user();
+    $u = require_login();
     $d = [
         'name'     => mb_substr(input('name'), 0, 100),
         'about'    => mb_substr(input('about'), 0, 2000),
@@ -139,6 +161,12 @@ function dash_office_save(): void
     if (!$o) {
         create_office((int) $u['id'], $d['name']);
         $o = office_for_user((int) $u['id']);
+        if ($u['role'] === 'user') {      // an individual opening an office becomes an office account
+            db()->prepare("UPDATE users SET role = 'agent' WHERE id = ?")->execute([$u['id']]);
+        }
+        if ($u['role'] === 'admin') {     // the admin's own office needs no code
+            db()->prepare("UPDATE offices SET activated_at = datetime('now') WHERE id = ?")->execute([$o['id']]);
+        }
     }
     db()->prepare('UPDATE offices SET name=?, about=?, phone=?, whatsapp=?, address=?, city_id=? WHERE id=?')
         ->execute([$d['name'], $d['about'], $d['phone'], $d['whatsapp'], $d['address'], $d['city_id'], $o['id']]);
@@ -157,6 +185,39 @@ function dash_office_save(): void
     }
     flash('success', t('office_saved'));
     redirect(url('dashboard/office'));
+}
+
+/** The admin's WhatsApp number for "send me my code" (config admin_whatsapp, else the first admin's phone). */
+function admin_whatsapp(): string
+{
+    $n = (string) config('admin_whatsapp', '');
+    if ($n === '') {
+        $n = (string) db()->query("SELECT phone FROM users WHERE role = 'admin' AND status = 'active' AND phone != '' ORDER BY id LIMIT 1")->fetchColumn();
+    }
+    return valid_phone($n) ? $n : '';
+}
+
+/** Push "new office waiting" to the admin's own devices (any device where the admin turned on notifications). */
+function notify_admins_new_office(int $officeId, string $name): void
+{
+    try {
+        $subs = db()->query("SELECT s.id, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s
+            JOIN users u ON u.id = s.user_id WHERE u.role = 'admin' AND u.status = 'active'")->fetchAll();
+        if ($subs && function_exists('push_send_many') && vapid_keys()) {
+            $base = absolute_base_url();
+            push_send_many($subs, [
+                'title' => t('new_office_push_title'),
+                'body'  => t('new_office_push_body', ['office' => $name]),
+                'url'   => $base . '/admin/offices',
+                'icon'  => $base . '/assets/img/icon-192.png',
+                'badge' => $base . '/assets/img/badge-72.png',
+                'tag'   => 'office-' . $officeId,
+                'dir'   => 'auto',
+            ]);
+        }
+    } catch (Throwable $e) {
+        error_log('aqarat new-office push: ' . $e->getMessage());     // never block sign-up on a push failure
+    }
 }
 
 /* ───────────── Sending notifications (office → followers) ───────────── */

@@ -124,7 +124,7 @@
         <div class="empty-state">
             <svg aria-hidden="true"><use href="#i-home"></use></svg>
             <p><?= e(t('no_listings_yet')) ?></p>
-            <a class="btn btn-primary" href="<?= e(url('dashboard/properties/new')) ?>"><?= e(t('add_first_listing')) ?></a>
+            <?php if (can_post_listings(current_user())): ?><a class="btn btn-primary" href="<?= e(url('dashboard/properties/new')) ?>"><?= e(t('add_first_listing')) ?></a><?php endif; ?>
         </div>
     <?php endif; ?>
 </section>
@@ -143,5 +143,5 @@
         <h2 id="cta-h"><?= e(t('cta_title')) ?></h2>
         <p><?= e(t('cta_text')) ?></p>
     </div>
-    <a class="btn btn-light btn-lg" href="<?= e(url(current_user() ? 'dashboard/properties/new' : 'register', current_user() ? [] : ['type' => 'office'])) ?>"><?= e(t('cta_button')) ?></a>
+    <a class="btn btn-light btn-lg" href="<?= e(can_post_listings(current_user()) ? url('dashboard/properties/new') : (current_user() ? url('dashboard/office') : url('register', ['type' => 'office']))) ?>"><?= e(t('cta_button')) ?></a>
 </section>

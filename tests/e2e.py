@@ -31,6 +31,11 @@ def login(s, email, pw):
 def img(fmt, size=(1200, 800), mode='RGB'):
     b = io.BytesIO(); Image.new(mode, size, (200, 100, 50, 128) if mode == 'RGBA' else (200, 100, 50)).save(b, fmt); return b.getvalue()
 
+import html as _html
+def admin_activate(adm, office_id, months='1'):
+    page = adm.get(B + '/admin/offices').text
+    return adm.post(B + f'/admin/offices/{office_id}/activate', data={'_csrf': tok(page), 'months': months})
+
 # ── Base path & PWA
 anon = sess()
 r = anon.get(B + '/')
@@ -80,6 +85,28 @@ r = o.post(B + '/dashboard/office', data={'_csrf': t, 'name': 'Test Realty', 'ab
            files={'logo': ('logo.png', img('PNG', (300, 300)), 'image/png')})
 ok('/uploads/' in r.text and '.webp' in r.text, 'office logo uploaded as WebP')
 office_id = re.search(r'/office/(\d+)"', r.text).group(1)
+
+# ── Activation: an office posts only after the admin activates it (one tap, after payment)
+r = o.get(B + '/dashboard/properties/new')
+ok(r.url.endswith('/dashboard/office') and 'Waiting for activation' in r.text and 'name="code"' not in r.text, 'new office is pending: no posting, nothing to type')
+ok(anon.get(B + '/office/' + office_id).status_code == 404 and 'Test Realty' not in anon.get(B + '/offices').text, 'pending office hidden from the public')
+adm = sess(); login(adm, 'admin@aqarat.local', ADMIN_PW)
+ap = adm.get(B + '/admin/offices').text
+ok(ap.index('Test Realty') < ap.index('status-published'), 'waiting offices listed first')
+ok('count-badge' in ap, 'admin nav shows waiting count')
+r = admin_activate(adm, office_id, '3')
+wa = _html.unescape(r.text.split('wa.me/9647501234567?text=', 1)[-1].split('"', 1)[0]) if 'wa.me/9647501234567?text=' in r.text else ''
+ok('is now active' in r.text and 'Test%20Realty' in wa and '%2Fdashboard%2Fproperties%2Fnew' in wa, 'one tap activates + ready WhatsApp message to the office')
+ok(o.get(B + '/dashboard/properties/new').url.endswith('/dashboard/properties/new') and 'Active until' in o.get(B + '/dashboard/office').text, 'office can post right away (3-month plan)')
+before = re.search(r'Active until (\d{4}-\d{2}-\d{2})', o.get(B + '/dashboard/office').text).group(1)
+admin_activate(adm, office_id, '1')
+after = re.search(r'Active until (\d{4}-\d{2}-\d{2})', o.get(B + '/dashboard/office').text).group(1)
+ok(after > before, 'early renewal extends from the current end date')
+page = adm.get(B + '/admin/offices').text
+adm.post(B + f'/admin/offices/{office_id}/deactivate', data={'_csrf': tok(page)})
+ok(o.get(B + '/dashboard/properties/new').url.endswith('/dashboard/office'), 'deactivate stops posting at once')
+admin_activate(adm, office_id, '3')
+ok(anon.get(B + '/office/' + office_id).status_code == 200, 'active office is public')
 
 t = tok(o.get(B + '/dashboard/properties/new').text)
 files = [('images[]', ('a.jpg', img('JPEG'), 'image/jpeg')), ('images[]', ('evil.jpg', b'<?php system($_GET["c"]); ?>', 'image/jpeg'))]
@@ -147,11 +174,24 @@ if have_crypto:
 other = sess()
 html = other.get(B + '/register').text; t = tok(html); human()
 other.post(B + '/register', data={'_csrf': t, '_ft': ft(html), 'name': 'Other', 'email': 'other@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
-ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
+r = other.get(B + '/dashboard/properties/new')
+ok(r.url.endswith('/dashboard/office') and 'Only real estate offices' in r.text, 'individuals cannot add listings (sent to open an office)')
+r = other.post(B + '/dashboard/properties', data={'_csrf': meta_tok(r.text), 'title': 'Private house for sale', 'purpose': 'sale', 'type': 'house', 'price': '1000', 'currency': 'USD', 'city_id': '1'})
+ok(r.url.endswith('/dashboard/office') and 'Private house for sale' not in other.get(B + '/dashboard/favorites').text, 'individual POST of a listing refused')
+ok(other.get(B + f'/dashboard/properties/{pid}/edit').url.endswith('/dashboard/office'), 'individual cannot open the listing editor')
+ok(other.get(B + '/dashboard').url.endswith('/dashboard/favorites'), 'customer dashboard opens saved listings')
 ok(other.get(B + '/admin').status_code == 403, 'non-admin blocked from /admin')
 r = other.get(B + '/dashboard/notifications')
 ok('/dashboard/notifications' not in r.url or 'real estate office accounts' in r.text, 'regular users cannot send notifications')
-ok(other.post(B + '/dashboard/notifications', data={'_csrf': meta_tok(r.text), 'title': 'spam', 'body': 'spam spam'}).url.endswith('/dashboard'), 'regular user POST to notify redirected')
+ok(other.post(B + '/dashboard/notifications', data={'_csrf': meta_tok(r.text), 'title': 'spam', 'body': 'spam spam'}).url.split('?')[0].rstrip('/').rsplit('/', 1)[-1] in ('dashboard', 'favorites'), 'regular user POST to notify redirected')
+# An individual can open an office; then the IDOR check still applies to someone else's listing.
+r = other.get(B + '/dashboard/office')
+r = other.post(B + '/dashboard/office', data={'_csrf': tok(r.text), 'name': 'Other Realty', 'about': '', 'phone': '', 'whatsapp': '', 'address': '', 'city_id': '1'})
+other_office = re.search(r'/office/(\d+)"', r.text).group(1)
+ok('Other Realty' in r.text and other.get(B + '/dashboard/properties/new').url.endswith('/dashboard/office'), 'individual opened an office: pending until activated')
+admin_activate(adm, other_office, '0')
+ok(other.get(B + '/dashboard/properties/new').url.endswith('/dashboard/properties/new') and 'Active until' not in other.get(B + '/dashboard/office').text, 'activated with no end date: may post')
+ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
 
 # ── Admin approves → auto notification once
 a = sess(); r = login(a, 'admin@aqarat.local', ADMIN_PW); ok('/dashboard' in r.url, 'admin login')
@@ -289,7 +329,7 @@ d = sess(); html = d.get(B + '/register').text; human()
 d.post(B + '/register', data={'_csrf': tok(html), '_ft': ft(html), 'name': 'Temp', 'email': 'temp@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
 html = d.get(B + '/dashboard/profile').text
 r = d.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'wrong'})
-ok('Delete my account' in r.text and login(sess(), 'temp@example.com', 'secret123').url.endswith('/dashboard'), 'delete account needs the right password')
+ok('Delete my account' in r.text and '/dashboard' in login(sess(), 'temp@example.com', 'secret123').url, 'delete account needs the right password')
 html = o.get(B + '/dashboard/profile').text
 r = o.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'secret123'})
 ok(r.url.rstrip('/').endswith(PREFIX) and (photo is None or anon.get(B.rsplit(PREFIX, 1)[0] + photo).status_code == 404)

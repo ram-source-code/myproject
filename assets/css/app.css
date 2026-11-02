@@ -1230,3 +1230,17 @@ dialog:modal { overscroll-behavior: contain; }
 .danger-details > summary::-webkit-details-marker { display: none; }
 .danger-details[open] > summary { margin-block-end: 12px; }
 .audit-list code { font-size: .8rem; }
+
+/* Office activation codes */
+.code-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-block-start: 8px; }
+.code-form select { inline-size: auto; min-block-size: 36px; padding-block: 4px; }
+.code-panel { border: 2px solid var(--brand); }
+.activation-code { font: 700 clamp(1.8rem, 6vw, 2.6rem)/1.1 Inter, ui-monospace, monospace; letter-spacing: 0.12em; margin: 8px 0; user-select: all; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.activation-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.activation-form .field { flex: 1 1 220px; margin: 0; }
+.activation-form input { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+.alert:has(.btn) { flex-wrap: wrap; align-items: center; }
+.alert .btn { margin-inline-start: auto; }
+.count-badge { display: inline-grid; place-items: center; min-inline-size: 1.4em; padding: 0 6px; border-radius: 999px; background: #b91c1c; color: #fff; font-size: 0.75rem; font-weight: 700; line-height: 1.5; }
+.code-panel:focus { outline: none; }

@@ -660,3 +660,28 @@ function run_maintenance(): void
         error_log('aqarat maintenance: ' . $e->getMessage());
     }
 }
+
+/**
+ * Office state for a user: 'none' (no office), 'pending' (never activated), 'expired', or 'active'.
+ * Only active offices publish listings; activation comes from the admin's code (sent after payment).
+ * Lives here so error pages can render the layout before controllers load.
+ */
+function office_state(?array $u): string
+{
+    static $cache = [];
+    if (!$u) {
+        return 'none';
+    }
+    if (!isset($cache[$u['id']])) {
+        $stmt = db()->prepare("SELECT activated_at, active_until, active_until IS NOT NULL AND active_until <= datetime('now') AS lapsed FROM offices WHERE user_id = ?");
+        $stmt->execute([(int) $u['id']]);
+        $o = $stmt->fetch();
+        $cache[$u['id']] = !$o ? 'none' : ($o['activated_at'] === null ? 'pending' : ($o['lapsed'] ? 'expired' : 'active'));
+    }
+    return $cache[$u['id']];
+}
+
+function can_post_listings(?array $u): bool
+{
+    return office_state($u) === 'active';
+}
