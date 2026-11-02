@@ -163,11 +163,13 @@ function pwa_manifest(): void
         'start_url'        => "$base/?source=pwa",
         'scope'            => "$base/",
         'display'          => 'standalone',
-        'orientation'      => 'portrait',
+        'orientation'      => 'any',              // tablets rotate freely
         'background_color' => '#f6f7f9',
         'theme_color'      => '#0f766e',
         'categories'       => ['lifestyle', 'shopping', 'business'],
         'icons'            => $icons,
+        'display_override' => ['standalone', 'minimal-ui'],
+        'launch_handler'   => ['client_mode' => 'navigate-existing'],
         'shortcuts'        => [
             ['name' => t('nav_buy'), 'url' => "$base/properties?purpose=sale", 'icons' => [['src' => "$base/assets/img/icon-192.png", 'sizes' => '192x192']]],
             ['name' => t('nav_rent'), 'url' => "$base/properties?purpose=rent", 'icons' => [['src' => "$base/assets/img/icon-192.png", 'sizes' => '192x192']]],

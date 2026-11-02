@@ -59,12 +59,15 @@
     /* ---------- View transitions: morph the card photo into the listing hero (and back) ---------- */
     const pathOf = (u) => { try { return decodeURIComponent(new URL(u, location.href).pathname); } catch { return ''; } };
     const cardImgFor = (path) => $$('.property-card a.stretched-link').find((a) => pathOf(a.href) === path)?.closest('.card')?.querySelector('.card-photo');
+    const touch = matchMedia('(pointer: coarse)').matches;
     window.addEventListener('pageswap', (e) => {
+        if (e.viewTransition && touch && e.activation?.navigationType === 'traverse') { e.viewTransition.skipTransition(); return; }
         if (!e.viewTransition || !e.activation?.entry?.url) return;
         const img = cardImgFor(pathOf(e.activation.entry.url));
         if (img && !$('.hero-photo')) img.classList.add('vt-hero');
     });
     window.addEventListener('pagereveal', (e) => {
+        if (e.viewTransition && touch && window.navigation?.activation?.navigationType === 'traverse') { e.viewTransition.skipTransition(); return; }
         if (!e.viewTransition || !window.navigation?.activation?.from?.url) return;
         const img = $('.hero-photo') ? null : cardImgFor(pathOf(navigation.activation.from.url));
         if (img) {
@@ -109,12 +112,14 @@
         $$('[data-install]').forEach((b) => { b.hidden = false; });
         if (banner && !bannerDismissed()) banner.hidden = false;
     });
+    const iosSheet = $('#ios-install');
+    const showIosGuide = () => { if (iosSheet && !iosSheet.open) iosSheet.showModal(); };
     if (isIOS && !isStandalone && banner && !bannerDismissed()) {
-        $('[data-install-text]', banner).textContent = tr('push_ios');
-        $('[data-install]', banner).hidden = true;
+        $$('[data-install]').forEach((b) => { b.hidden = false; });
         banner.hidden = false;
     }
     $$('[data-install]').forEach((b) => b.addEventListener('click', async () => {
+        if (isIOS && !isStandalone) { showIosGuide(); return; }
         if (!deferredPrompt) return;
         deferredPrompt.prompt();
         await deferredPrompt.userChoice.catch(() => {});
@@ -123,6 +128,28 @@
     }));
     $('[data-install-dismiss]')?.addEventListener('click', () => { store.set('installDismissed', Date.now()); banner.hidden = true; });
     window.addEventListener('appinstalled', () => { if (banner) banner.hidden = true; });
+
+    /* ---------- Installed app: back button (iOS/Android standalone have no browser chrome) ---------- */
+    const backBtn = $('[data-app-back]');
+    if (backBtn && isStandalone) {
+        const atHome = location.pathname.replace(/\/$/, '') === BASE;
+        backBtn.hidden = atHome;
+        backBtn.addEventListener('click', () => {
+            const fromHere = document.referrer && new URL(document.referrer).origin === location.origin;
+            if (fromHere && history.length > 1) history.back(); else location.href = BASE + '/';
+        });
+    }
+
+    /* ---------- On-screen keyboard: hide fixed bottom bars while typing (iOS ignores interactive-widget) ---------- */
+    if (window.visualViewport && matchMedia('(pointer: coarse)').matches) {
+        const vv = window.visualViewport;
+        const check = () => {
+            const typing = document.activeElement?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select');
+            document.documentElement.classList.toggle('kb-open', Boolean(typing) && window.innerHeight - vv.height > 150);
+        };
+        vv.addEventListener('resize', check);
+        document.addEventListener('focusout', () => setTimeout(check, 50));
+    }
 
     /* ---------- Header menus (<details>) ---------- */
     const menus = $$('details.menu');
@@ -433,7 +460,12 @@
         return reg ? reg.pushManager.getSubscription() : null;
     }
     async function ensureSub() {
-        if (!pushSupported) throw new Error(isIOS && !isStandalone ? tr('push_ios') : tr('push_unsupported'));
+        if (isIOS && !isStandalone) {
+            // iOS only allows web push for apps added to the Home Screen: show the 3-step guide.
+            showIosGuide();
+            throw Object.assign(new Error(''), { silent: true });
+        }
+        if (!pushSupported) throw new Error(tr('push_unsupported'));
         const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
         if (perm !== 'granted') throw new Error(tr('push_denied'));
         const reg = await navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' });
@@ -486,7 +518,7 @@
                     toast(tr('followed_toast'));
                 }
             } catch (err) {
-                toast(err.message && err.message !== 'request' ? err.message : tr('push_unsupported'));
+                if (!err.silent) toast(err.message && err.message !== 'request' ? err.message : tr('push_unsupported'));
             } finally {
                 btn.disabled = false;
             }
@@ -499,11 +531,11 @@
         const list = $('[data-follow-list]', center);
         const feed = $('[data-feed]', center);
         const news = $('[data-news-toggle]', center);
-        if (!pushSupported) {
+        if (!pushSupported || (isIOS && !isStandalone)) {
             const w = $('[data-push-unsupported]', center);
             w.hidden = false;
             if (isIOS && !isStandalone) $('[data-push-unsupported-text]', w).textContent = tr('push_ios');
-            news.disabled = true;
+            news.disabled = !(isIOS && !isStandalone);   // on iOS the toggle opens the install guide
         }
         const paint = (st) => {
             news.checked = Boolean(st.site_news);
@@ -566,7 +598,7 @@
                 paint(await getStatus());
             } catch (err) {
                 news.checked = !news.checked;
-                toast(err.message);
+                if (!err.silent) toast(err.message);
             } finally {
                 news.disabled = !pushSupported;
             }
@@ -585,7 +617,7 @@
             $('span', btn).textContent = tr('alert_on');
             toast(r.message + ' — ' + r.label);
         } catch (err) {
-            toast(err.data?.error || (err.message !== 'request' ? err.message : tr('push_unsupported')));
+            if (!err.silent) toast(err.data?.error || (err.message !== 'request' ? err.message : tr('push_unsupported')));
         } finally { btn.disabled = false; }
     }));
 

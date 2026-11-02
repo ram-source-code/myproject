@@ -9,7 +9,7 @@ $useMap = $useMap ?? false;
 <html lang="<?= e(lang()) ?>" dir="<?= e(dir_attr()) ?>">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
@@ -54,6 +54,9 @@ $useMap = $useMap ?? false;
     <link rel="manifest" href="<?= e(url('manifest.webmanifest')) ?>">
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
+    <?php foreach (IOS_SPLASH as [$w, $h, $r]): ?>
+        <link rel="apple-touch-startup-image" href="<?= e(asset("img/splash/splash-{$w}x{$h}.png")) ?>" media="(device-width: <?= intdiv($w, $r) ?>px) and (device-height: <?= intdiv($h, $r) ?>px) and (-webkit-device-pixel-ratio: <?= $r ?>) and (orientation: portrait)">
+    <?php endforeach; ?>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -103,6 +106,7 @@ $useMap = $useMap ?? false;
 
 <header class="site-header">
     <div class="container header-inner">
+        <button type="button" class="app-back" data-app-back hidden aria-label="<?= e(t('back')) ?>"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button>
         <a class="brand" href="<?= e(url('/')) ?>">
             <svg class="brand-mark" aria-hidden="true"><use href="#i-home"></use></svg>
             <span><?= e(app_name()) ?></span>
@@ -236,6 +240,23 @@ $useMap = $useMap ?? false;
     <a href="<?= e(url('offices')) ?>"<?= $navActive('/office') ?>><svg aria-hidden="true"><use href="#i-building"></use></svg><span><?= e(t('offices_short')) ?></span></a>
     <a href="<?= e(url($user ? 'dashboard' : 'login')) ?>"<?= $navActive('/dashboard') ?: $navActive('/login') ?>><svg aria-hidden="true"><use href="#i-user"></use></svg><span><?= e(t('account')) ?></span></a>
 </nav>
+
+<dialog id="ios-install" class="sheet" aria-labelledby="ios-install-h" closedby="any">
+    <div class="sheet-head">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h2 id="ios-install-h" class="panel-title"><?= e(t('ios_install_title')) ?></h2>
+        <form method="dialog"><button class="icon-btn-plain" aria-label="<?= e(t('close')) ?>"><svg aria-hidden="true"><use href="#i-x"></use></svg></button></form>
+    </div>
+    <div class="sheet-body">
+        <p class="muted"><?= e(t('ios_install_why')) ?></p>
+        <ol class="ios-steps">
+            <li><span><?= e(t('ios_step_1')) ?></span><svg aria-hidden="true"><use href="#i-ios-share"></use></svg></li>
+            <li><span><?= e(t('ios_step_2')) ?></span><svg aria-hidden="true"><use href="#i-square-plus"></use></svg></li>
+            <li><span><?= e(t('ios_step_3')) ?></span><svg aria-hidden="true"><use href="#i-smartphone"></use></svg></li>
+        </ol>
+        <form method="dialog"><button class="btn btn-primary btn-block"><?= e(t('got_it')) ?></button></form>
+    </div>
+</dialog>
 
 <dialog id="confirm-dialog" class="dialog dialog-sm" aria-labelledby="confirm-title" closedby="any">
     <form method="dialog">

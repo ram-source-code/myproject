@@ -555,4 +555,11 @@ return [
     'chk_https' => 'Install a free SSL certificate (cPanel → SSL/TLS or Let’s Encrypt). The app and notifications need HTTPS.',
     'chk_upload' => 'For phone videos, raise upload_max_filesize to 64M and post_max_size to 160M (cPanel → PHP options).',
     'show_n_results' => 'Show :n results',
+    'back' => 'Back',
+    'ios_install_title' => 'Add Aqarat to your Home Screen',
+    'got_it' => 'Got it',
+    'ios_install_why' => 'On iPhone and iPad, notifications work once Aqarat is on your Home Screen. It takes 10 seconds:',
+    'ios_step_1' => 'In Safari, tap the Share button',
+    'ios_step_2' => 'Scroll down and tap “Add to Home Screen”',
+    'ios_step_3' => 'Open Aqarat from your Home Screen and tap Follow again',
 ];

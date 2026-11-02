@@ -67,6 +67,17 @@ and on `localhost`).
 - Measured on a throttled mid-range phone (4× CPU, 9 Mbps/80 ms): **LCP ≈ 1.0 s, CLS 0.000** on home,
   search and listing pages.
 
+## iPhone & iPad
+- **iPhone:** 16 px form fields (no Safari focus-zoom), notch/Dynamic-Island safe areas in landscape and in the
+  installed app, hover effects only for real pointers (no "sticky hover" after a tap), fixed bars hide while the
+  keyboard is open, native swipe-back is not doubled by our page transition, launch screens for current iPhones.
+- **Installed app (Home Screen):** a back button appears in the header (standalone apps have no browser chrome).
+- **Push on iOS:** Apple only allows web push for Home-Screen apps (iOS 16.4+). Tapping Follow / Alert me in
+  Safari opens a 3-step "Add to Home Screen" guide instead of failing.
+- **iPad / tablets:** header navigation instead of the phone tab bar, 3-column listing grid, sheet filters in
+  portrait and a filter sidebar in landscape, two-column listing page with a sticky contact card from 860 px,
+  grid gallery (the swipe strip is phone-only), and the app may rotate freely (`orientation: any`).
+
 ## Icons
 All icons are **self-hosted SVG**: [Lucide](https://lucide.dev) (ISC) plus the WhatsApp/Telegram marks from
 Simple Icons (CC0). The full packs live in `bin/icon-pack/` (not web-served); `php bin/build-icons.php` builds

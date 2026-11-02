@@ -25,6 +25,7 @@ $MAP = [
     'video' => ['lucide', 'video'], 'copy' => ['lucide', 'copy'], 'share' => ['lucide', 'share-2'], 'camera' => ['lucide', 'camera'],
     'locate' => ['lucide', 'locate-fixed'], 'sparkles' => ['lucide', 'sparkles'], 'arrow' => ['lucide', 'arrow-up-right'],
     'minus' => ['lucide', 'minus'], 'wifi-off' => ['lucide', 'wifi-off'], 'settings' => ['lucide', 'settings'],
+    'ios-share' => ['lucide', 'share'], 'square-plus' => ['lucide', 'square-plus'], 'smartphone' => ['lucide', 'smartphone'],
     'whatsapp' => ['simple-icons', 'whatsapp'], 'telegram' => ['simple-icons', 'telegram'],
 ];
 // icons used from CSS (mask-image) — written as standalone files

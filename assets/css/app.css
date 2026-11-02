@@ -227,18 +227,23 @@ code { font-size: 0.9em; background: var(--surface-2); padding: 0.1em 0.4em; bor
 .menu-list a:hover, .menu-btn:hover { background: var(--surface-2); }
 .menu-list a[aria-current="true"] { color: var(--brand-strong); font-weight: 700; }
 
+/* Tablet (iPad portrait / split view): compact header navigation, icon-only actions */
 @media (max-width: 960px) {
-    .primary-nav { display: none; }
     .hide-sm { display: none !important; }
     .header-inner { gap: 8px; }
     .brand { font-size: 1.15rem; }
+    .primary-nav ul a { padding: 8px 10px; font-size: .95rem; }
+}
+/* Phone: header shrinks to brand + actions, navigation moves to the bottom tab bar */
+@media (max-width: 720px) {
+    .primary-nav { display: none; }
     :root { --bottom-nav-h: 64px; }
     body { padding-block-end: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom)); }
 }
 
-/* Mobile app-style bottom navigation */
+/* Phone app-style bottom navigation (tablets use the header) */
 .bottom-nav { display: none; }
-@media (max-width: 960px) {
+@media (max-width: 720px) {
     .bottom-nav {
         position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 70;
         display: grid; grid-template-columns: repeat(5, 1fr);
@@ -527,7 +532,8 @@ fieldset.segmented-full { display: grid; } /* legend inside grid */
 
 .property-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; margin-block-start: 24px; }
 .property-aside { position: sticky; inset-block-start: calc(var(--header-h) + 16px); }
-@media (max-width: 960px) {
+@media (max-width: 1180px) { .property-layout { grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; } }
+@media (max-width: 860px) {
     .property-layout { grid-template-columns: 1fr; }
     .property-aside { position: static; }
 }
@@ -838,9 +844,9 @@ dialog:modal { overscroll-behavior: contain; }
 .inquiry-details > summary::-webkit-details-marker { display: none; }
 .inquiry-details[open] > summary { margin-block-end: 14px; }
 
-/* Sticky mobile contact bar */
+/* Sticky contact bar (phones and narrow tablets, where the contact card is not beside the content) */
 .sticky-contact { display: none; }
-@media (max-width: 960px) {
+@media (max-width: 860px) {
     .sticky-contact {
         position: fixed; inset-inline: 0; z-index: 65; inset-block-end: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
         display: flex; align-items: center; gap: 8px; padding: 10px var(--gutter);
@@ -1088,4 +1094,87 @@ dialog:modal { overscroll-behavior: contain; }
 
 @media (forced-colors: active) {
     .field-error::before, .breadcrumbs li + li::before, .chip-check input:checked + span::before { background: CanvasText; }
+}
+
+/* ==========================================================================
+   iPhone / iPad specifics
+   ========================================================================== */
+
+/* iOS zooms the page when a focused field is smaller than 16px — never let that happen */
+@media (pointer: coarse) {
+    input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea { font-size: max(16px, 1em); }
+    .btn, .qchip, .chip-check span, .menu-list a, .bottom-nav a, .page-link { touch-action: manipulation; }
+}
+
+/* Landscape iPhones: keep content clear of the notch / Dynamic Island */
+@supports (padding: max(0px)) {
+    body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+    .bottom-nav, .sticky-contact { padding-left: max(var(--gutter), env(safe-area-inset-left)); padding-right: max(var(--gutter), env(safe-area-inset-right)); }
+    .toast { margin-block-end: env(safe-area-inset-bottom); }
+    .lightbox-bar { padding-top: max(12px, env(safe-area-inset-top)); }
+    .lightbox-thumbs { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+
+/* Touch screens: hover styles "stick" after a tap on iOS — only lift/zoom for real pointers */
+@media (hover: none) {
+    .card:hover { transform: none; box-shadow: var(--shadow-sm); border-color: var(--border); }
+    .card:hover .card-media img { transform: none; }
+    .city-tile:hover { transform: none; filter: none; }
+    .gallery-item:hover img { filter: none; }
+    .office-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border); }
+    .btn:hover { filter: none; }
+}
+
+/* On-screen keyboard open: fixed bars would cover the field being typed in */
+.kb-open .bottom-nav, .kb-open .sticky-contact, .kb-open .install-banner { display: none !important; }
+.kb-open body, body.kb-open { padding-block-end: 0; }
+
+/* Installed app (standalone): there is no browser back button, so provide one */
+.app-back { display: none; }
+@media (display-mode: standalone) {
+    .app-back:not([hidden]) { display: inline-grid; }
+    .site-header { padding-top: env(safe-area-inset-top); }
+}
+.app-back {
+    place-items: center; inline-size: 40px; block-size: 40px; border: 0; border-radius: 999px;
+    background: var(--surface-2); color: var(--text); margin-inline-end: -4px;
+}
+[dir="ltr"] .app-back svg { transform: scaleX(-1); }
+
+/* iOS "Add to Home Screen" guide */
+.ios-steps { list-style: none; padding: 0; display: grid; gap: 14px; counter-reset: s; margin-block: 8px 16px; }
+.ios-steps li { display: flex; align-items: center; gap: 12px; counter-increment: s; }
+.ios-steps li::before {
+    content: counter(s); display: inline-grid; place-items: center; flex: none; inline-size: 28px; block-size: 28px;
+    border-radius: 50%; background: var(--brand-soft); color: var(--brand-strong); font-weight: 700;
+}
+.ios-steps svg { inline-size: 22px; block-size: 22px; color: var(--info); flex: none; }
+
+/* ---------- Tablet layouts (iPad mini → iPad Pro, portrait & landscape) ---------- */
+@media (min-width: 721px) and (max-width: 1180px) {
+    :root { --gutter: 24px; }
+    .grid-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+    .hero { padding-block: 56px 48px; }
+    .hero-search-fields { grid-template-columns: 1fr 1fr; }
+    .hero-search-fields .btn { grid-column: 1 / -1; }
+    .city-tiles { grid-template-columns: repeat(3, 1fr); }
+    .gallery { aspect-ratio: 16 / 9; }
+    .footer-grid { grid-template-columns: 1.4fr 1fr 1fr; }
+    .dash-layout { gap: 20px; }
+    .results-map { block-size: min(70vh, 820px); }
+}
+/* iPad portrait (and split view): sheet filters + full-width results; dashboard tabs on top */
+@media (min-width: 721px) and (max-width: 960px) {
+    .sheet { max-inline-size: 560px; margin: auto; border-radius: 24px; max-block-size: 80dvh; }
+    .property-layout { margin-block-start: 20px; }
+    .lightbox-stage { padding-inline: 72px; }
+}
+/* Tablets in landscape: a touch-sized but desktop-like layout */
+@media (min-width: 961px) and (max-width: 1180px) and (pointer: coarse) {
+    .listing-layout { grid-template-columns: 280px minmax(0, 1fr); gap: 20px; }
+    .dash-layout { grid-template-columns: 210px minmax(0, 1fr); }
+}
+/* 3 listing columns on iPad (portrait & landscape) */
+@media (min-width: 721px) and (max-width: 1366px) {
+    .grid-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 236px), 1fr)); gap: 16px; }
 }
