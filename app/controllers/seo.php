@@ -88,7 +88,8 @@ function city_page(string $slug): void
 function sitemap_xml(): void
 {
     $o = absolute_origin();
-    $urls = [[$o . url('/'), null], [$o . url('properties'), null], [$o . url('offices'), null]];
+    $urls = [[$o . url('/'), null], [$o . url('properties'), null], [$o . url('offices'), null],
+             [$o . url('privacy'), '2026-11-02'], [$o . url('terms'), '2026-11-02']];
     foreach (db()->query("SELECT DISTINCT c.slug FROM cities c JOIN properties p ON p.city_id = c.id AND p.status = 'published'") as $c) {
         $urls[] = [$o . url('city/' . $c['slug']), null];
     }
@@ -114,7 +115,8 @@ function robots_txt(): void
     $b = base_path();
     header('Content-Type: text/plain; charset=utf-8');
     echo "User-agent: *\n";
-    foreach (['dashboard', 'admin', 'login', 'register', 'push', 'api', 'lang', 'install'] as $p) {
+    // The admin path is NOT listed (robots.txt is public recon material); private pages send X-Robots-Tag: noindex.
+    foreach (['dashboard', 'login', 'register', 'push', 'api', 'lang'] as $p) {
         echo "Disallow: $b/$p\n";
     }
     echo 'Sitemap: ' . absolute_origin() . url('sitemap.xml') . "\n";
@@ -212,3 +214,21 @@ function render_og_image(array $p, string $cover, string $file): void
     imagejpeg($im, $file, 82);
     imagedestroy($im);
 }
+
+
+/* ───────────── Legal pages ───────────── */
+
+function legal_page(string $doc): void
+{
+    $email = preg_replace('/^mailto:/', '', (string) config('push_subject'));
+    render('legal/page', [
+        'pageTitle' => t($doc === 'privacy' ? 'privacy_policy' : 'terms') . ' — ' . app_name(),
+        'heading'   => t($doc === 'privacy' ? 'privacy_policy' : 'terms'),
+        'doc'       => $doc,
+        'updated'   => '2026-11-02',
+        'email'     => filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : 'admin@example.com',
+    ]);
+}
+
+function privacy_page(): void { legal_page('privacy'); }
+function terms_page(): void { legal_page('terms'); }

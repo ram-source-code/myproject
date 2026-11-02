@@ -18,6 +18,7 @@ function admin_home(): void
         GROUP BY c.id ORDER BY n DESC LIMIT 8")->fetchAll();
     $pending = db()->query(PROPERTY_SELECT . " WHERE p.status='pending' ORDER BY p.created_at ASC LIMIT 10")->fetchAll();
     $journal = db()->query('PRAGMA journal_mode')->fetchColumn();
+    $log = db()->query('SELECT l.*, u.name FROM admin_log l LEFT JOIN users u ON u.id = l.user_id ORDER BY l.id DESC LIMIT 30')->fetchAll();
 
     render('admin/index', [
         'pageTitle' => t('admin') . ' — ' . app_name(),
@@ -25,6 +26,7 @@ function admin_home(): void
         'byCity'    => $byCity,
         'pending'   => $pending,
         'journal'   => $journal,
+        'log'       => $log,
         'active'    => 'admin',
     ]);
 }
@@ -69,6 +71,7 @@ function admin_property_status(int $id): void
         abort(400);
     }
     db()->prepare("UPDATE properties SET status = ?, updated_at = datetime('now') WHERE id = ?")->execute([$status, $id]);
+    admin_log('listing.status', "#$id → $status");
     if ($status === 'published' && ($p = find_property($id))) {
         notify_listing_published($p); // tell the office's followers (once per listing)
     }
@@ -80,6 +83,7 @@ function admin_property_feature(int $id): void
 {
     require_admin();
     db()->prepare('UPDATE properties SET is_featured = 1 - is_featured WHERE id = ?')->execute([$id]);
+    admin_log('listing.feature', "#$id");
     flash('success', t('status_changed'));
     back('/admin/properties');
 }
@@ -119,6 +123,7 @@ function admin_user_update(int $id): void
         abort(400);
     }
     db()->prepare('UPDATE users SET role = ?, status = ? WHERE id = ?')->execute([$role, $status, $id]);
+    admin_log('user.update', "#$id role=$role status=$status");
     flash('success', t('user_saved'));
     redirect(url('admin/users'));
 }
@@ -143,6 +148,7 @@ function admin_city_create(): void
     }
     $stmt = db()->prepare('INSERT OR IGNORE INTO cities (name_ku, name_ar, name_en, slug) VALUES (?,?,?,?)');
     $stmt->execute([$ku, $ar, $en, $slug]);
+    admin_log('city.add', $en);
     flash($stmt->rowCount() ? 'success' : 'error', $stmt->rowCount() ? t('city_added') : t('city_exists'));
     redirect(url('admin/cities'));
 }
@@ -151,6 +157,7 @@ function admin_city_delete(int $id): void
 {
     require_admin();
     db()->prepare('DELETE FROM cities WHERE id = ?')->execute([$id]);
+    admin_log('city.delete', "#$id");
     flash('success', t('city_deleted'));
     redirect(url('admin/cities'));
 }
@@ -166,6 +173,7 @@ function admin_office_verify(int $id): void
 {
     require_admin();
     db()->prepare('UPDATE offices SET is_verified = 1 - is_verified WHERE id = ?')->execute([$id]);
+    admin_log('office.verify', "#$id");
     flash('success', t('status_changed'));
     redirect(url('admin/offices'));
 }
@@ -202,6 +210,7 @@ function admin_notification_send(): void
         with_old(compact('title', 'body', 'target') + ['property_id' => (string) $propertyId], $errors);
         redirect(url('admin/notifications'));
     }
+    admin_log('push.send', ($officeId ? "followers of office #$officeId" : 'everyone') . ': ' . $title);
     $res = $officeId
         ? send_notification((int) $u['id'], $officeId, 'followers', $title, $body, $relUrl, $propertyId)
         : send_notification((int) $u['id'], null, 'all', $title, $body, $relUrl, $propertyId);
@@ -234,6 +243,7 @@ function admin_report_resolve(int $propertyId): void
         db()->prepare("UPDATE properties SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")->execute([$propertyId]);
     }
     db()->prepare("UPDATE reports SET status = 'resolved' WHERE property_id = ?")->execute([$propertyId]);
+    admin_log('report.resolve', "#$propertyId " . input('action'));
     flash('success', t('status_changed'));
     redirect(url('admin/reports'));
 }
@@ -245,6 +255,25 @@ function admin_duplicate_dismiss(int $a, int $b): void
         db()->prepare("UPDATE properties SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")->execute([$a]);
     }
     db()->prepare('UPDATE duplicate_flags SET dismissed = 1 WHERE property_id = ? AND other_id = ?')->execute([$a, $b]);
+    admin_log('duplicate.' . (input('action') === 'reject' ? 'reject' : 'dismiss'), "#$a ~ #$b");
     flash('success', t('status_changed'));
     redirect(url('admin/reports') . '#dups');
+}
+
+
+/** Consistent SQLite snapshot (VACUUM INTO works while the site is live, even in WAL mode), streamed as a download. */
+function admin_backup(): void
+{
+    require_admin();
+    $tmp = dirname((string) config('db_path')) . '/backup-' . bin2hex(random_bytes(6)) . '.sqlite';
+    db()->exec('VACUUM INTO ' . db()->quote($tmp));
+    admin_log('backup.download', basename($tmp));
+    @set_time_limit(300);
+    header('Content-Type: application/vnd.sqlite3');
+    header('Content-Disposition: attachment; filename="aqarat-backup-' . date('Y-m-d-His') . '.sqlite"');
+    header('Content-Length: ' . filesize($tmp));
+    header('Cache-Control: no-store');
+    readfile($tmp);
+    @unlink($tmp);
+    exit;
 }

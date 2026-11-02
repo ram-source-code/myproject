@@ -283,7 +283,7 @@ function dash_password_update(): void
         with_old([], $errors);
         redirect(url('dashboard/profile') . '#password');
     }
-    db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($new, PASSWORD_DEFAULT), $u['id']]);
+    db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($new, PASSWORD_ALGO), $u['id']]);
     login_user((int) $u['id']); // new session id
     flash('success', t('password_saved'));
     redirect(url('dashboard/profile'));
@@ -304,4 +304,65 @@ function dash_video_delete(int $videoId): void
     delete_video_file($v);
     flash('success', t('video_deleted'));
     redirect(url('dashboard/properties/' . $v['property_id'] . '/edit') . '#videos');
+}
+
+
+/** "Download my data" — everything stored about the signed-in user, as JSON. */
+function dash_export(): void
+{
+    $u = require_login();
+    $q = static function (string $sql, array $args) { $st = db()->prepare($sql); $st->execute($args); return $st->fetchAll(); };
+    $data = [
+        'exported_at' => date('c'),
+        'account'     => $u,
+        'office'      => $q('SELECT name, about, phone, whatsapp, address, city_id, is_verified, created_at FROM offices WHERE user_id = ?', [$u['id']])[0] ?? null,
+        'listings'    => array_map(static function ($p) {
+            $p['photos'] = array_map(static fn($i) => upload_url($i['filename']), property_images((int) $p['id']));
+            $p['videos'] = array_map(static fn($v) => upload_url($v['filename']), property_videos((int) $p['id']));
+            return $p;
+        }, $q('SELECT id, title, description, purpose, type, city_id, district, address, project, price, currency, rent_period, deed, area,
+                      bedrooms, bathrooms, floor, year_built, furnished, features, lat, lng, status, views, created_at, updated_at
+               FROM properties WHERE user_id = ?', [$u['id']])),
+        'favorites'      => $q('SELECT property_id, created_at FROM favorites WHERE user_id = ?', [$u['id']]),
+        'inquiries_sent' => $q('SELECT property_id, name, email, phone, message, created_at FROM inquiries WHERE user_id = ?', [$u['id']]),
+        'inquiries_received' => $q('SELECT i.property_id, i.name, i.email, i.phone, i.message, i.created_at FROM inquiries i
+                                    JOIN properties p ON p.id = i.property_id WHERE p.user_id = ?', [$u['id']]),
+    ];
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Disposition: attachment; filename="aqarat-my-data-' . date('Y-m-d') . '.json"');
+    header('Cache-Control: no-store');
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+/** "Delete my account" — removes the user, their office, listings (incl. photo/video files) and favourites. */
+function dash_delete_account(): void
+{
+    $u = require_login();
+    $stmt = db()->prepare('SELECT password_hash FROM users WHERE id = ?');
+    $stmt->execute([$u['id']]);
+    if (!password_verify((string) ($_POST['password'] ?? ''), (string) $stmt->fetchColumn())) {
+        with_old([], ['delete_password' => t('v_current_password')]);
+        redirect(url('dashboard/profile') . '#delete');
+    }
+    if ($u['role'] === 'admin' && (int) db()->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'active'")->fetchColumn() <= 1) {
+        flash('error', t('last_admin'));
+        redirect(url('dashboard/profile') . '#delete');
+    }
+    $ids = db()->prepare('SELECT id FROM properties WHERE user_id = ?');
+    $ids->execute([$u['id']]);
+    foreach ($ids->fetchAll(PDO::FETCH_COLUMN) as $pid) {
+        delete_property((int) $pid);                         // also deletes photo/video files
+    }
+    $logo = db()->prepare('SELECT logo FROM offices WHERE user_id = ?');
+    $logo->execute([$u['id']]);
+    $l = (string) $logo->fetchColumn();
+    if ($l !== '' && preg_match('/^[a-f0-9]{32}\.webp$/', $l)) {
+        @unlink(config('upload_dir') . '/' . $l);
+    }
+    db()->prepare('UPDATE inquiries SET user_id = NULL WHERE user_id = ?')->execute([$u['id']]);
+    db()->prepare('DELETE FROM users WHERE id = ?')->execute([$u['id']]);   // cascades: office, follows, favorites
+    logout_user();
+    flash('success', t('account_deleted'));
+    redirect(url('/'));
 }

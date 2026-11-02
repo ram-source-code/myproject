@@ -70,6 +70,11 @@ function routes(): array
         ['GET',  '/dashboard/profile',                  'dash_profile'],
         ['POST', '/dashboard/profile',                  'dash_profile_update'],
         ['POST', '/dashboard/password',                 'dash_password_update'],
+        ['GET',  '/dashboard/export',                   'dash_export'],
+        ['POST', '/dashboard/delete-account',           'dash_delete_account'],
+        ['POST', '/admin/backup',                       'admin_backup'],
+        ['GET',  '/privacy',                            'privacy_page'],
+        ['GET',  '/terms',                              'terms_page'],
 
         ['GET',  '/admin',                              'admin_home'],
         ['GET',  '/admin/properties',                   'admin_properties'],
@@ -99,6 +104,9 @@ function dispatch(string $method, string $path): void
     $path = rtrim($path, '/') ?: '/';
     if ($method === 'HEAD') {
         $method = 'GET';
+    }
+    if ($method === 'GET' && random_int(1, 20) === 1) {
+        run_maintenance();                                   // daily privacy/retention cleanup (cheap check)
     }
     // Until an administrator exists, every page leads to the guided installer.
     if (!admin_exists() && !in_array($path, ['/install', '/manifest.webmanifest', '/offline', '/robots.txt'], true)) {

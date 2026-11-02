@@ -20,6 +20,9 @@ def sess():
     return s
 
 def tok(html): return re.search(r'name="_csrf" value="([^"]+)"', html).group(1)
+def ft(html): return re.search(r'name="_ft" value="([^"]+)"', html).group(1)   # signed form-render time
+import time
+def human(sec=3.2): time.sleep(sec)                                             # public forms reject instant (bot) submits
 def meta_tok(html): return re.search(r'name="csrf-token" content="([^"]+)"', html).group(1)
 def flashes(html): return re.findall(r'class="alert alert-(\w+)">.*?<p>(.*?)</p>', html, re.S)
 def login(s, email, pw):
@@ -63,12 +66,12 @@ ok('data-follow-office="1"' in r.text and 'wa.me/964' in r.text, 'office page: f
 
 # ── Registration as office, listing with images
 o = sess()
-t = tok(o.get(B + '/register').text)
-r = o.post(B + '/register', data={'_csrf': t, 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
+html = o.get(B + '/register').text; t = tok(html); human()
+r = o.post(B + '/register', data={'_csrf': t, '_ft': ft(html), 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
                                    'office_name': '', 'password': 'secret123', 'password_confirm': 'secret123'})
 ok('Enter your office name' in r.text, 'office registration requires office name')
-t = tok(r.text)
-r = o.post(B + '/register', data={'_csrf': t, 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
+t = tok(r.text); f2 = ft(r.text); human()
+r = o.post(B + '/register', data={'_csrf': t, '_ft': f2, 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
                                    'office_name': 'Test Realty', 'password': 'secret123', 'password_confirm': 'secret123'})
 ok(r.url.endswith('/dashboard/office') and 'Test Realty' in r.text, 'office account + office profile created')
 t = tok(r.text)
@@ -141,8 +144,8 @@ if have_crypto:
 
 # ── Authorization
 other = sess()
-t = tok(other.get(B + '/register').text)
-other.post(B + '/register', data={'_csrf': t, 'name': 'Other', 'email': 'other@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
+html = other.get(B + '/register').text; t = tok(html); human()
+other.post(B + '/register', data={'_csrf': t, '_ft': ft(html), 'name': 'Other', 'email': 'other@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
 ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
 ok(other.get(B + '/admin').status_code == 403, 'non-admin blocked from /admin')
 r = other.get(B + '/dashboard/notifications')
@@ -206,17 +209,33 @@ ok('fonts/noto-sans-arabic-wght.woff2' in anon.get(B + '/assets/css/app.css').te
 
 # ── Report a listing
 rp = sess(); html = rp.get(pr.url).text
-r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), 'reason': 'wrong_price', 'details': 'price is 200k'})
+r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), 'reason': 'fake', 'details': 'bot report'})
+ok('bot report' not in a.get(B + '/admin/reports').text, 'instant (bot) report silently ignored')
+human(2.2)
+r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), '_ft': ft(html), 'reason': 'wrong_price', 'details': 'price is 200k'})
 ok(any('Thank you' in m for _, m in flashes(r.text)), 'report submitted')
 ok('price is 200k' in a.get(B + '/admin/reports').text, 'admin sees report')
 ok('Possible duplicates' in a.get(B + '/admin/reports').text, 'duplicates section on admin reports page')
-html = a.get(B + '/admin/notifications').text
-ok('Broadcast' in html, 'admin notifications page')
-r = a.post(B + '/admin/notifications', data={'_csrf': tok(html), 'target': 'all', 'title': 'Welcome', 'body': 'Aqarat is live', 'property_id': ''})
-ok(any('Notification sent' in m for _, m in flashes(r.text)), 'admin broadcast')
-t = tok(a.get(B + '/admin/offices').text)
-a.post(B + f'/admin/offices/{office_id}/verify', data={'_csrf': t})
-ok('Verified' in anon.get(B + '/office/' + office_id).text, 'admin verifies office')
+
+# ── Enquiry: bot vs human (honeypot + minimum fill time)
+iq = sess(); html = iq.get(pr.url).text
+iq.post(B + f'/property/{pid}/inquiry', data={'_csrf': tok(html), 'name': 'Bot', 'email': 'bot@example.com', 'message': 'instant spam message here'})
+human()
+r = iq.post(B + f'/property/{pid}/inquiry', data={'_csrf': tok(html), '_ft': ft(html), 'name': 'Sara', 'email': 'sara@example.com', 'phone': '0750 555 1234', 'message': 'Is the house still available? Thanks'})
+inbox = o.get(B + '/dashboard/inquiries').text
+ok('sara@example.com' in inbox and 'bot@example.com' not in inbox, 'enquiry delivered to owner; instant bot enquiry dropped')
+
+# ── Spec hardening: .well-known, robots, noindex, headers, Argon2id
+ok(anon.get(B + '/.well-known/acme-challenge/test').status_code != 403, '/.well-known/ is not blocked (SSL renewal)')
+rob = anon.get(B + '/robots.txt').text
+ok('/admin' not in rob and 'Sitemap:' in rob, 'robots.txt does not advertise the admin path')
+ok('noindex' in a.get(B + '/admin').headers.get('X-Robots-Tag', '') and 'X-Robots-Tag' not in anon.get(B + '/').headers, 'noindex on private pages only')
+hdr = anon.get(B + '/').headers
+ok(hdr.get('Cross-Origin-Resource-Policy') == 'same-origin' and 'geolocation=(self)' in hdr.get('Permissions-Policy', ''), 'CORP + Permissions-Policy headers')
+sm = anon.get(B + '/sitemap.xml').text
+priv = anon.get(B + '/privacy')
+ok(priv.status_code == 200 and 'aqarat_sid' in priv.text and anon.get(B + '/terms').status_code == 200 and '/privacy' in sm, 'privacy (lists cookies/storage) + terms pages, in sitemap')
+ok('/privacy' in anon.get(B + '/').text, 'legal links in footer')
 
 # ── Videos: valid MP4 accepted, disguised script rejected
 mp4 = b'\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2' + b'\x00\x00\x00\x08free' + os.urandom(2048)
@@ -239,8 +258,41 @@ r = sess().post(B + '/login', data={'email': 'x', 'password': 'y'})
 ok(r.status_code == 403 and 'session expired' in r.text.lower(), 'POST without CSRF -> 403 "session expired"')
 x = sess()
 for _ in range(6):
-    r = x.post(B + '/login', data={'_csrf': tok(x.get(B + '/login').text), 'email': 'office@example.com', 'password': 'wrong'})
+    r = x.post(B + '/login', data={'_csrf': tok(x.get(B + '/login').text), 'email': 'other@example.com', 'password': 'wrong'})
 ok('Too many attempts' in r.text, 'login throttled')
+
+html = a.get(B + '/admin/notifications').text
+ok('Broadcast' in html, 'admin notifications page')
+r = a.post(B + '/admin/notifications', data={'_csrf': tok(html), 'target': 'all', 'title': 'Welcome', 'body': 'Aqarat is live', 'property_id': ''})
+ok(any('Notification sent' in m for _, m in flashes(r.text)), 'admin broadcast')
+t = tok(a.get(B + '/admin/offices').text)
+a.post(B + f'/admin/offices/{office_id}/verify', data={'_csrf': t})
+ok('Verified' in anon.get(B + '/office/' + office_id).text, 'admin verifies office')
+
+
+# ── Backup restores; data export; account deletion removes files
+html = a.get(B + '/admin').text
+bk = a.post(B + '/admin/backup', data={'_csrf': tok(html)})
+import sqlite3, tempfile
+tf = tempfile.NamedTemporaryFile(suffix='.sqlite', delete=False); tf.write(bk.content); tf.close()
+con = sqlite3.connect(tf.name)
+ok(bk.headers.get('Content-Type', '').startswith('application/vnd.sqlite3') and con.execute('SELECT COUNT(*) FROM properties').fetchone()[0] > 20
+   and con.execute('PRAGMA integrity_check').fetchone()[0] == 'ok', 'backup download restores (integrity ok, data present)')
+con.close(); os.unlink(tf.name)
+ok('backup.download' in a.get(B + '/admin').text and 'listing.status' in a.get(B + '/admin').text, 'admin audit log records actions')
+ex = o.get(B + '/dashboard/export')
+exj = ex.json()
+ok(exj['account']['email'] == 'office@example.com' and len(exj['listings']) >= 1 and 'photos' in exj['listings'][0], 'data export (JSON) contains account + listings')
+photo = exj['listings'][0]['photos'][0] if exj['listings'][0]['photos'] else None
+d = sess(); html = d.get(B + '/register').text; human()
+d.post(B + '/register', data={'_csrf': tok(html), '_ft': ft(html), 'name': 'Temp', 'email': 'temp@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
+html = d.get(B + '/dashboard/profile').text
+r = d.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'wrong'})
+ok('Delete my account' in r.text and login(sess(), 'temp@example.com', 'secret123').url.endswith('/dashboard'), 'delete account needs the right password')
+html = o.get(B + '/dashboard/profile').text
+r = o.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'secret123'})
+ok(r.url.rstrip('/').endswith(PREFIX) and (photo is None or anon.get(B.rsplit(PREFIX, 1)[0] + photo).status_code == 404)
+   and anon.get(B + '/office/' + office_id).status_code == 404, 'account deletion removes office, listings and photo files')
 
 print(f'\n{fails} failure(s)')
 sys.exit(1 if fails else 0)

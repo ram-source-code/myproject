@@ -12,6 +12,7 @@ function json_body(): array
 
 function push_follow(): void
 {
+    rate_limit('push', 120, 600);
     $in = json_body();
     $officeId = (int) ($in['office_id'] ?? 0);
     if (!$officeId || !find_office($officeId)) {
@@ -56,6 +57,7 @@ function push_news(): void
 /** Save the current search as an alert for this device. */
 function push_search_save(): void
 {
+    rate_limit('push', 120, 600);
     $in = json_body();
     $f = compact_filters(search_filters(is_array($in['query'] ?? null) ? $in['query'] : []));
     try {

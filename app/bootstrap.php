@@ -85,12 +85,16 @@ if (PHP_SAPI !== 'cli') {
     header_remove('X-Powered-By');
     $tileOrigin = maps_enabled() ? (string) preg_replace('~^(https?://[^/]+).*$~', '$1', (string) config('tile_url')) : '';
     $tileOrigin = preg_match('~^https?://[A-Za-z0-9.\-:{}]+$~', $tileOrigin) ? ' ' . str_replace(['{s}.', '{s}'], ['*.', '*'], $tileOrigin) : '';
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:{$tileOrigin}; media-src 'self' blob:; style-src 'self'; font-src 'self'; script-src 'self' 'inline-speculation-rules'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:{$tileOrigin}; media-src 'self' blob:; style-src 'self'; font-src 'self'; script-src 'self' 'inline-speculation-rules'; connect-src 'self'; worker-src 'self';" . ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? ' upgrade-insecure-requests;' : '') . " manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=(self), interest-cohort=()');   // location: own pages only, after the visitor allows it
     header('Cross-Origin-Opener-Policy: same-origin');
+    header('Cross-Origin-Resource-Policy: same-origin');
+    if (preg_match('#/(dashboard|admin|login|register|install|notifications|push|api)(/|$)#', (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH))) {
+        header('X-Robots-Tag: noindex, nofollow');       // private/utility pages never appear in search results
+    }
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }

@@ -89,8 +89,8 @@ function property_inquiry(int $id): void
     if (!$p || $p['status'] !== 'published') {
         abort(404);
     }
-    // Honeypot field: bots fill every input
-    if (input('website') !== '') {
+    // Honeypot field + minimum fill time: bots fill every input and submit instantly — pretend success
+    if (input('website') !== '' || !form_time_ok(3)) {
         flash('success', t('inquiry_sent'));
         redirect(property_url($p));
     }
@@ -118,7 +118,10 @@ function property_inquiry(int $id): void
         with_old($data, $errors);
         redirect(property_url($p) . '#contact');
     }
-    if (rate_limited_inquiry(client_ip())) {
+    rate_limit('inquiry', 30, 600);                  // per IP (CGNAT-friendly)
+    $perEmail = db()->prepare("SELECT COUNT(*) FROM inquiries WHERE email = ? AND created_at > datetime('now', '-1 hour')");
+    $perEmail->execute([$data['email']]);
+    if ((int) $perEmail->fetchColumn() >= 10) {
         abort(429);
     }
     db()->prepare('INSERT INTO inquiries (property_id, user_id, name, email, phone, message, ip) VALUES (?,?,?,?,?,?,?)')
@@ -177,13 +180,18 @@ function property_report(int $id): void
         flash('error', t('v_required'));
         redirect(property_url($p) . '#report');
     }
+    if (!form_time_ok(2)) {
+        flash('success', t('report_thanks'));        // silent for bots
+        redirect(property_url($p));
+    }
+    rate_limit('report', 30, 3600);
     $ip = client_ip();
     $dupe = db()->prepare("SELECT
         (SELECT COUNT(*) FROM reports WHERE ip = ? AND property_id = ?),
         (SELECT COUNT(*) FROM reports WHERE ip = ? AND created_at > datetime('now', '-1 hour'))");
     $dupe->execute([$ip, $id, $ip]);
     [$same, $recent] = $dupe->fetch(PDO::FETCH_NUM);
-    if (!$same && $recent < 5) {
+    if (!$same && $recent < 30) {
         db()->prepare('INSERT INTO reports (property_id, reason, details, ip) VALUES (?,?,?,?)')
             ->execute([$id, $reason, mb_substr(input('details'), 0, 500), $ip]);
     }

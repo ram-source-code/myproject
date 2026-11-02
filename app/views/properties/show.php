@@ -209,6 +209,7 @@ $isLive = $p['status'] === 'published';
                     <form method="post" action="<?= e(url('property/' . $p['id'] . '/inquiry')) ?>" class="stack" novalidate data-validate>
                         <?= csrf_field() ?>
                         <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+                        <?= form_time_field() ?>
                         <div class="field">
                             <label for="iq-name"><?= e(t('your_name')) ?></label>
                             <input id="iq-name" name="name" required minlength="2" maxlength="100" autocomplete="name" value="<?= e(old('name', $user['name'] ?? '')) ?>"<?= field_aria('name') ?>>
@@ -229,6 +230,7 @@ $isLive = $p['status'] === 'published';
                             <textarea id="iq-msg" name="message" rows="4" required minlength="10" maxlength="2000"<?= field_aria('message') ?>><?= e(old('message', t('inquiry_default', ['id' => $p['id']]))) ?></textarea>
                             <?= field_error('message') ?>
                         </div>
+                        <p class="hint"><?= e(t('inquiry_privacy')) ?> <a href="<?= e(url('privacy')) ?>"><?= e(t('privacy_policy')) ?></a></p>
                         <button class="btn btn-primary btn-block" type="submit"><svg aria-hidden="true"><use href="#i-send"></use></svg><?= e(t('send')) ?></button>
                     </form>
                 </details>
@@ -239,6 +241,7 @@ $isLive = $p['status'] === 'published';
                 <summary><svg aria-hidden="true"><use href="#i-flag"></use></svg><?= e(t('report_listing')) ?></summary>
                 <form method="post" action="<?= e(url('property/' . $p['id'] . '/report')) ?>" class="stack">
                     <?= csrf_field() ?>
+                    <?= form_time_field() ?>
                     <fieldset class="stack-sm">
                         <legend><?= e(t('report_reason')) ?></legend>
                         <?php foreach (REPORT_REASONS as $i => $rs): ?>

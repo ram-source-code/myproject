@@ -229,7 +229,9 @@ $useMap = $useMap ?? false;
         </div>
     </div>
     <div class="container footer-bottom">
-        <small>© <?= date('Y') ?> <?= e(app_name()) ?>. <?= e(t('rights')) ?></small>
+        <small>© <?= date('Y') ?> <?= e(app_name()) ?>. <?= e(t('rights')) ?>
+            · <a href="<?= e(url('privacy')) ?>"><?= e(t('privacy_policy')) ?></a>
+            · <a href="<?= e(url('terms')) ?>"><?= e(t('terms')) ?></a></small>
         <ul class="footer-langs">
             <?php foreach (LANG_NAMES as $code => $name): ?>
                 <li><a href="<?= e(url('lang/' . $code)) ?>" lang="<?= e($code) ?>"><?= e($name) ?></a></li>

@@ -35,7 +35,7 @@ if (!$adminId) {
         $password = rtrim(strtr(base64_encode(random_bytes(12)), '+/', '-_'), '=');
     }
     $pdo->prepare("INSERT INTO users (name, email, phone, password_hash, role) VALUES (?,?,?,?, 'admin')")
-        ->execute(['بەڕێوەبەری ماڵپەڕ', $email, '0750 000 0000', password_hash($password, PASSWORD_DEFAULT)]);
+        ->execute(['بەڕێوەبەری ماڵپەڕ', $email, '0750 000 0000', password_hash($password, PASSWORD_ALGO)]);
     $adminId = (int) $pdo->lastInsertId();
     echo "admin created: $email" . ($generated ? "  password: $password  (change it after first login)" : '') . PHP_EOL;
 } else {
