@@ -6,13 +6,16 @@ declare(strict_types=1);
  */
 
 const PROPERTY_SELECT = "
-    SELECT p.*, c.name_ar AS city_ar, c.name_en AS city_en,
-           u.name AS owner_name, u.phone AS owner_phone, u.email AS owner_email, u.role AS owner_role,
+    SELECT p.*, c.name_ar AS city_ar, c.name_en AS city_en, c.name_ku AS city_ku,
+           u.name AS owner_name, u.phone AS owner_phone, u.role AS owner_role,
+           o.id AS office_id, o.name AS office_name, o.slug AS office_slug, o.logo AS office_logo,
+           o.is_verified AS office_verified, o.phone AS office_phone, o.whatsapp AS office_whatsapp,
            (SELECT thumb FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_thumb,
            (SELECT COUNT(*) FROM property_images i WHERE i.property_id = p.id) AS image_count
     FROM properties p
     LEFT JOIN cities c ON c.id = p.city_id
     JOIN users u ON u.id = p.user_id
+    LEFT JOIN offices o ON o.user_id = p.user_id
 ";
 
 /** Build an FTS5 MATCH expression from free text (each term is quoted → no syntax injection). */
@@ -39,12 +42,14 @@ function search_filters(array $src): array
         'beds'      => input_int('beds', null, $src),
         'baths'     => input_int('baths', null, $src),
         'furnished' => !empty($src['furnished']) ? 1 : null,
+        'deed'      => in_array($src['deed'] ?? '', DEED_TYPES, true) ? $src['deed'] : '',
+        'office'    => input_int('office', null, $src),
         'sort'      => in_array($src['sort'] ?? '', ['newest', 'price_asc', 'price_desc', 'area_desc', 'popular'], true) ? $src['sort'] : 'newest',
     ];
     return $f;
 }
 
-function search_properties(array $f, int $page, int $perPage): array
+function search_where(array $f): array
 {
     $where = ["p.status = 'published'"];
     $args = [];
@@ -59,22 +64,33 @@ function search_properties(array $f, int $page, int $perPage): array
             $args[] = $f[$k];
         }
     }
-    if ($f['min_price'] !== null) { $where[] = 'p.price >= ?';     $args[] = $f['min_price']; }
-    if ($f['max_price'] !== null) { $where[] = 'p.price <= ?';     $args[] = $f['max_price']; }
+    // Price filters are in USD; IQD listings are compared via their converted price_usd.
+    if ($f['min_price'] !== null) { $where[] = 'p.price_usd >= ?'; $args[] = $f['min_price']; }
+    if ($f['max_price'] !== null) { $where[] = 'p.price_usd <= ?'; $args[] = $f['max_price']; }
+    if ($f['deed'] !== '')        { $where[] = 'p.deed = ?';       $args[] = $f['deed']; }
+    if ($f['office'] !== null)    { $where[] = 'p.user_id = (SELECT user_id FROM offices WHERE id = ?)'; $args[] = $f['office']; }
     if ($f['min_area']  !== null) { $where[] = 'p.area >= ?';      $args[] = $f['min_area']; }
     if ($f['beds']      !== null) { $where[] = 'p.bedrooms >= ?';  $args[] = $f['beds']; }
     if ($f['baths']     !== null) { $where[] = 'p.bathrooms >= ?'; $args[] = $f['baths']; }
     if ($f['furnished'])          { $where[] = 'p.furnished = 1'; }
+    return [implode(' AND ', $where), $args];
+}
 
-    $order = match ($f['sort']) {
-        'price_asc'  => 'p.price ASC',
-        'price_desc' => 'p.price DESC',
+function search_order(array $f): string
+{
+    return match ($f['sort']) {
+        'price_asc'  => 'p.price_usd ASC',
+        'price_desc' => 'p.price_usd DESC',
         'area_desc'  => 'p.area DESC',
         'popular'    => 'p.views DESC',
         default      => 'p.is_featured DESC, p.created_at DESC',
     };
+}
 
-    $w = implode(' AND ', $where);
+function search_properties(array $f, int $page, int $perPage): array
+{
+    [$w, $args] = search_where($f);
+    $order = search_order($f);
     $cnt = db()->prepare("SELECT COUNT(*) FROM properties p WHERE $w");
     $cnt->execute($args);
     $pg = paginate((int) $cnt->fetchColumn(), $perPage, $page);
@@ -83,6 +99,18 @@ function search_properties(array $f, int $page, int $perPage): array
     $stmt->execute([...$args, $pg['per_page'], $pg['offset']]);
     return [$stmt->fetchAll(), $pg];
 }
+
+/** Lightweight rows for the map view (only listings with coordinates). */
+function map_properties(array $f, int $limit = 500): array
+{
+    [$w, $args] = search_where($f);
+    $stmt = db()->prepare("SELECT p.id, p.title, p.price, p.currency, p.purpose, p.rent_period, p.type, p.lat, p.lng, p.bedrooms, p.area,
+            (SELECT thumb FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_thumb
+        FROM properties p WHERE $w AND p.lat IS NOT NULL AND p.lng IS NOT NULL ORDER BY p.is_featured DESC, p.created_at DESC LIMIT ?");
+    $stmt->execute([...$args, $limit]);
+    return $stmt->fetchAll();
+}
+
 
 function find_property(int $id): ?array
 {
@@ -110,8 +138,8 @@ function latest_properties(int $limit, bool $featuredOnly = false): array
 function similar_properties(array $p, int $limit = 4): array
 {
     $stmt = db()->prepare(PROPERTY_SELECT . " WHERE p.status = 'published' AND p.id != ? AND p.purpose = ? AND (p.type = ? OR p.city_id IS ?)
-        ORDER BY (p.type = ?) + (p.city_id IS ?) DESC, ABS(p.price - ?) ASC LIMIT ?");
-    $stmt->execute([$p['id'], $p['purpose'], $p['type'], $p['city_id'], $p['type'], $p['city_id'], $p['price'], $limit]);
+        ORDER BY (p.type = ?) + (p.city_id IS ?) DESC, ABS(p.price_usd - ?) ASC LIMIT ?");
+    $stmt->execute([$p['id'], $p['purpose'], $p['type'], $p['city_id'], $p['type'], $p['city_id'], $p['price_usd'], $limit]);
     return $stmt->fetchAll();
 }
 
@@ -163,10 +191,14 @@ function validate_property_input(array $in): array
     $d['district'] = mb_substr(trim((string) ($in['district'] ?? '')), 0, 100);
     $d['address']  = mb_substr(trim((string) ($in['address'] ?? '')), 0, 200);
 
+    $d['currency'] = in_array($in['currency'] ?? '', CURRENCIES, true) ? $in['currency'] : 'USD';
     $d['price'] = input_int('price', null, $in);
-    if ($d['price'] === null || $d['price'] < 0 || $d['price'] > 10_000_000_000) {
+    if ($d['price'] === null || $d['price'] < 0 || $d['price'] > 1_000_000_000_000) {
         $e['price'] = t('v_price');
     }
+    $d['price_usd'] = to_usd((int) $d['price'], $d['currency']);
+    $d['deed'] = in_array($in['deed'] ?? '', DEED_TYPES, true) ? $in['deed'] : null;
+    $d['project'] = mb_substr(trim((string) ($in['project'] ?? '')), 0, 100);
     $area = convert_arabic_digits((string) ($in['area'] ?? ''));
     $d['area'] = is_numeric($area) ? (float) $area : -1;
     if ($d['area'] <= 0 || $d['area'] > 10_000_000) {

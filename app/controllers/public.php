@@ -9,8 +9,13 @@ function home_page(): void
             (SELECT COUNT(*) FROM properties WHERE status='published') AS listings,
             (SELECT COUNT(*) FROM properties WHERE status='published' AND purpose='sale') AS sale,
             (SELECT COUNT(*) FROM properties WHERE status='published' AND purpose='rent') AS rent,
-            (SELECT COUNT(DISTINCT city_id) FROM properties WHERE status='published') AS cities")->fetch();
+            (SELECT COUNT(DISTINCT city_id) FROM properties WHERE status='published') AS cities,
+            (SELECT COUNT(*) FROM offices) AS offices")->fetch();
     $byType = db()->query("SELECT type, COUNT(*) n FROM properties WHERE status='published' GROUP BY type ORDER BY n DESC")->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    $topCities = db()->query("SELECT c.*, COUNT(p.id) n FROM cities c JOIN properties p ON p.city_id = c.id AND p.status = 'published'
+        GROUP BY c.id ORDER BY n DESC LIMIT 6")->fetchAll();
+    $offices = db()->query(OFFICE_SELECT . ' ORDER BY o.is_verified DESC, listings DESC LIMIT 8')->fetchAll();
 
     render('home', [
         'pageTitle' => app_name() . ' — ' . t('tagline'),
@@ -18,6 +23,8 @@ function home_page(): void
         'latest'    => $latest,
         'stats'     => $stats,
         'byType'    => $byType,
+        'topCities' => $topCities,
+        'offices'   => $offices,
     ]);
 }
 
@@ -27,11 +34,14 @@ function properties_index(): void
     $page = max(1, input_int('page', 1, $_GET) ?? 1);
     [$items, $pg] = search_properties($f, $page, (int) config('listings_per_page'));
 
+    $view = ($_GET['view'] ?? '') === 'map' ? 'map' : 'list';
     render('properties/index', [
         'pageTitle' => t('nav_listings') . ' — ' . app_name(),
         'filters'   => $f,
         'items'     => $items,
         'pg'        => $pg,
+        'viewMode'  => $view,
+        'useMap'    => $view === 'map',
     ]);
 }
 
@@ -52,6 +62,8 @@ function property_show(int $id): void
     }
 
     render('properties/show', [
+        'useMap'    => $p['lat'] !== null && $p['lng'] !== null,
+        'office'    => $p['office_id'] ? find_office((int) $p['office_id']) : null,
         'pageTitle' => $p['title'] . ' — ' . app_name(),
         'metaDesc'  => str_limit(preg_replace('/\s+/u', ' ', $p['description']) ?? '', 160),
         'p'         => $p,
@@ -86,7 +98,7 @@ function property_inquiry(int $id): void
     if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
         $errors['email'] = t('v_email');
     }
-    if ($data['phone'] !== '' && !preg_match('/^[0-9+\-\s()]{6,30}$/', convert_arabic_digits($data['phone']))) {
+    if ($data['phone'] !== '' && !valid_phone($data['phone'])) {
         $errors['phone'] = t('v_phone');
     }
     if (mb_strlen($data['message']) < 10) {
@@ -135,6 +147,6 @@ function favorite_toggle(int $id): void
 
 function switch_lang(string $code): void
 {
-    setcookie('lang', $code, ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax', 'httponly' => true]);
+    setcookie('lang', $code, ['expires' => time() + 31536000, 'path' => base_path() . '/', 'samesite' => 'Lax', 'httponly' => true]);
     back('/');
 }

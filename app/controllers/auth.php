@@ -76,6 +76,7 @@ function register_submit(): void
         'email' => mb_strtolower(mb_substr(input('email'), 0, 150)),
         'phone' => mb_substr(convert_arabic_digits(input('phone')), 0, 30),
         'role'  => input('role') === 'agent' ? 'agent' : 'user',
+        'office_name' => mb_substr(input('office_name'), 0, 100),
     ];
     $password = (string) ($_POST['password'] ?? '');
     $confirm  = (string) ($_POST['password_confirm'] ?? '');
@@ -87,8 +88,11 @@ function register_submit(): void
     if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
         $errors['email'] = t('v_email');
     }
-    if ($data['phone'] !== '' && !preg_match('/^[0-9+\-\s()]{6,30}$/', $data['phone'])) {
+    if ($data['phone'] !== '' && !valid_phone($data['phone'])) {
         $errors['phone'] = t('v_phone');
+    }
+    if ($data['role'] === 'agent' && mb_strlen($data['office_name']) < 2) {
+        $errors['office_name'] = t('v_office_name');
     }
     if (strlen($password) < 8 || strlen($password) > 128) {
         $errors['password'] = t('v_password');
@@ -109,10 +113,14 @@ function register_submit(): void
 
     db()->prepare('INSERT INTO users (name, email, phone, password_hash, role) VALUES (?,?,?,?,?)')
         ->execute([$data['name'], $data['email'], $data['phone'], password_hash($password, PASSWORD_DEFAULT), $data['role']]);
-    login_user((int) db()->lastInsertId());
+    $userId = (int) db()->lastInsertId();
+    if ($data['role'] === 'agent') {
+        create_office($userId, $data['office_name'], $data['phone']);
+    }
+    login_user($userId);
     clear_old();
     flash('success', t('registered'));
-    redirect(url('dashboard'));
+    redirect(url($data['role'] === 'agent' ? 'dashboard/office' : 'dashboard'));
 }
 
 function logout_submit(): void

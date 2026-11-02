@@ -4,8 +4,12 @@
         <h1 class="page-title"><?= e(t('admin_cities')) ?></h1>
         <section class="panel" aria-labelledby="addc-h">
             <h2 id="addc-h" class="panel-title"><?= e(t('add_city')) ?></h2>
-            <form method="post" action="<?= e(url('admin/cities')) ?>" class="grid-3 align-end" novalidate data-validate>
+            <form method="post" action="<?= e(url('admin/cities')) ?>" class="grid-4 align-end" novalidate data-validate>
                 <?= csrf_field() ?>
+                <div class="field">
+                    <label for="name_ku"><?= e(t('name_ku')) ?></label>
+                    <input id="name_ku" name="name_ku" required maxlength="80" lang="ckb" dir="rtl">
+                </div>
                 <div class="field">
                     <label for="name_ar"><?= e(t('name_ar')) ?></label>
                     <input id="name_ar" name="name_ar" required maxlength="80" lang="ar" dir="rtl">
@@ -20,10 +24,11 @@
         </section>
         <div class="table-wrap" role="region" aria-label="<?= e(t('admin_cities')) ?>" tabindex="0">
             <table class="table">
-                <thead><tr><th scope="col"><?= e(t('name_ar')) ?></th><th scope="col"><?= e(t('name_en')) ?></th><th scope="col"><?= e(t('admin_listings')) ?></th><th scope="col"><span class="visually-hidden"><?= e(t('actions')) ?></span></th></tr></thead>
+                <thead><tr><th scope="col"><?= e(t('name_ku')) ?></th><th scope="col"><?= e(t('name_ar')) ?></th><th scope="col"><?= e(t('name_en')) ?></th><th scope="col"><?= e(t('admin_listings')) ?></th><th scope="col"><span class="visually-hidden"><?= e(t('actions')) ?></span></th></tr></thead>
                 <tbody>
                 <?php foreach ($items as $c): ?>
                     <tr>
+                        <td data-label="<?= e(t('name_ku')) ?>" lang="ckb"><?= e($c['name_ku']) ?></td>
                         <td data-label="<?= e(t('name_ar')) ?>" lang="ar"><?= e($c['name_ar']) ?></td>
                         <td data-label="<?= e(t('name_en')) ?>" lang="en"><?= e($c['name_en']) ?></td>
                         <td data-label="<?= e(t('admin_listings')) ?>"><?= (int) $c['n'] ?></td>

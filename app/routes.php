@@ -5,6 +5,9 @@ require __DIR__ . '/controllers/public.php';
 require __DIR__ . '/controllers/auth.php';
 require __DIR__ . '/controllers/dashboard.php';
 require __DIR__ . '/controllers/admin.php';
+require __DIR__ . '/controllers/offices.php';
+require __DIR__ . '/controllers/pwa.php';
+require __DIR__ . '/controllers/install.php';
 
 /** [method, regex (without delimiters), handler] — numbered groups are passed as int args. */
 function routes(): array
@@ -15,7 +18,19 @@ function routes(): array
         ['GET',  '/property/(\d+)',                     'property_show'],
         ['POST', '/property/(\d+)/inquiry',             'property_inquiry'],
         ['POST', '/favorite/(\d+)',                     'favorite_toggle'],
-        ['GET',  '/lang/(ar|en)',                       'switch_lang'],
+        ['GET',  '/lang/(ckb|ar|en)',                   'switch_lang'],
+        ['GET',  '/offices',                            'offices_index'],
+        ['GET',  '/office/(\d+)',                       'office_show'],
+        ['GET',  '/notifications',                      'notifications_page'],
+        ['POST', '/push/follow',                        'push_follow'],
+        ['POST', '/push/unfollow',                      'push_unfollow'],
+        ['POST', '/push/news',                          'push_news'],
+        ['POST', '/push/status',                        'push_status'],
+        ['GET',  '/api/map',                            'api_map'],
+        ['GET',  '/manifest.webmanifest',               'pwa_manifest'],
+        ['GET',  '/offline',                            'offline_page'],
+        ['GET',  '/install',                            'install_form'],
+        ['POST', '/install',                            'install_submit'],
 
         ['GET',  '/login',                              'login_form'],
         ['POST', '/login',                              'login_submit'],
@@ -35,6 +50,10 @@ function routes(): array
         ['GET',  '/dashboard/favorites',                'dash_favorites'],
         ['GET',  '/dashboard/inquiries',                'dash_inquiries'],
         ['POST', '/dashboard/inquiries/(\d+)/read',     'dash_inquiry_read'],
+        ['GET',  '/dashboard/office',                   'dash_office'],
+        ['POST', '/dashboard/office',                   'dash_office_save'],
+        ['GET',  '/dashboard/notifications',            'dash_notifications'],
+        ['POST', '/dashboard/notifications',            'dash_notification_send'],
         ['GET',  '/dashboard/profile',                  'dash_profile'],
         ['POST', '/dashboard/profile',                  'dash_profile_update'],
         ['POST', '/dashboard/password',                 'dash_password_update'],
@@ -45,6 +64,10 @@ function routes(): array
         ['POST', '/admin/properties/(\d+)/feature',     'admin_property_feature'],
         ['GET',  '/admin/users',                        'admin_users'],
         ['POST', '/admin/users/(\d+)',                  'admin_user_update'],
+        ['GET',  '/admin/offices',                      'admin_offices'],
+        ['POST', '/admin/offices/(\d+)/verify',         'admin_office_verify'],
+        ['GET',  '/admin/notifications',                'admin_notifications'],
+        ['POST', '/admin/notifications',                'admin_notification_send'],
         ['GET',  '/admin/cities',                       'admin_cities'],
         ['POST', '/admin/cities',                       'admin_city_create'],
         ['POST', '/admin/cities/(\d+)/delete',          'admin_city_delete'],
@@ -53,9 +76,9 @@ function routes(): array
 
 function dispatch(string $method, string $path): void
 {
-    $base = parse_url(config('app_url'), PHP_URL_PATH) ?: '';
-    if ($base !== '' && str_starts_with($path, $base)) {
-        $path = substr($path, strlen($base)) ?: '/';
+    $base = base_path();
+    if ($base !== '' && ($path === $base || str_starts_with($path, $base . '/'))) {
+        $path = substr($path, strlen($base));
     }
     $path = rtrim($path, '/') ?: '/';
     if ($method === 'HEAD') {

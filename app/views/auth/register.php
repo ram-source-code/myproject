@@ -16,15 +16,22 @@
             </div>
             <div class="field">
                 <label for="phone"><?= e(t('phone')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
-                <input id="phone" name="phone" type="tel" maxlength="30" autocomplete="tel" dir="ltr" value="<?= e(old('phone')) ?>"<?= field_aria('phone') ?>>
+                <input id="phone" name="phone" type="tel" maxlength="30" autocomplete="tel" dir="ltr" placeholder="0750 000 0000" value="<?= e(old('phone')) ?>"<?= field_aria('phone') ?>>
                 <p class="hint"><?= e(t('phone_hint')) ?></p>
                 <?= field_error('phone') ?>
             </div>
+            <?php $defRole = old('role', ($_GET['type'] ?? '') === 'office' ? 'agent' : 'user'); ?>
             <fieldset class="segmented segmented-full">
                 <legend><?= e(t('account_type')) ?></legend>
-                <label><input type="radio" name="role" value="user" <?= old('role', 'user') === 'user' ? 'checked' : '' ?>><span><?= e(t('role_user')) ?></span></label>
-                <label><input type="radio" name="role" value="agent" <?= old('role') === 'agent' ? 'checked' : '' ?>><span><?= e(t('role_agent')) ?></span></label>
+                <label><input type="radio" name="role" value="user" data-role <?= $defRole === 'user' ? 'checked' : '' ?>><span><?= e(t('role_user')) ?></span></label>
+                <label><input type="radio" name="role" value="agent" data-role <?= $defRole === 'agent' ? 'checked' : '' ?>><span><?= e(t('role_agent')) ?></span></label>
             </fieldset>
+            <div class="field" data-office-only>
+                <label for="office_name"><?= e(t('office_name')) ?></label>
+                <input id="office_name" name="office_name" maxlength="100" value="<?= e(old('office_name')) ?>" placeholder="<?= e(t('office_name_ph')) ?>"<?= field_aria('office_name') ?>>
+                <p class="hint"><?= e(t('office_register_hint')) ?></p>
+                <?= field_error('office_name') ?>
+            </div>
             <div class="field">
                 <label for="password"><?= e(t('password')) ?></label>
                 <div class="password-wrap">

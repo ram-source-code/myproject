@@ -181,5 +181,95 @@ function migrations(): array
             VALUES (new.id, new.title, new.description, new.district, new.address);
         END;
         SQL,
+
+        // v2 — Kurdistan localisation, offices (نوسینگە), currencies, web push
+        <<<SQL
+        ALTER TABLE cities ADD COLUMN name_ku TEXT NOT NULL DEFAULT '';
+
+        ALTER TABLE properties ADD COLUMN currency  TEXT    NOT NULL DEFAULT 'USD' CHECK (currency IN ('USD','IQD'));
+        ALTER TABLE properties ADD COLUMN price_usd INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE properties ADD COLUMN deed      TEXT    CHECK (deed IN ('tapo','agricultural','investment','other') OR deed IS NULL);
+        ALTER TABLE properties ADD COLUMN project   TEXT    NOT NULL DEFAULT '';
+        UPDATE properties SET price_usd = price;
+        CREATE INDEX idx_properties_price_usd ON properties(status, price_usd);
+
+        CREATE TABLE offices (
+            id          INTEGER PRIMARY KEY,
+            user_id     INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+            name        TEXT    NOT NULL,
+            slug        TEXT    NOT NULL UNIQUE,
+            logo        TEXT,
+            about       TEXT    NOT NULL DEFAULT '',
+            phone       TEXT    NOT NULL DEFAULT '',
+            whatsapp    TEXT    NOT NULL DEFAULT '',
+            address     TEXT    NOT NULL DEFAULT '',
+            city_id     INTEGER REFERENCES cities(id) ON DELETE SET NULL,
+            is_verified INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE push_subscriptions (
+            id           INTEGER PRIMARY KEY,
+            endpoint     TEXT    NOT NULL UNIQUE,
+            p256dh       TEXT    NOT NULL,
+            auth         TEXT    NOT NULL,
+            user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            lang         TEXT    NOT NULL DEFAULT 'ckb',
+            site_news    INTEGER NOT NULL DEFAULT 0,
+            fail_count   INTEGER NOT NULL DEFAULT 0,
+            created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+            last_seen_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+
+        CREATE TABLE office_follows (
+            subscription_id INTEGER NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+            office_id       INTEGER NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (subscription_id, office_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX idx_follows_office ON office_follows(office_id);
+
+        CREATE TABLE notifications (
+            id          INTEGER PRIMARY KEY,
+            sender_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            office_id   INTEGER REFERENCES offices(id) ON DELETE CASCADE,
+            audience    TEXT    NOT NULL CHECK (audience IN ('followers','all')),
+            kind        TEXT    NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','auto')),
+            title       TEXT    NOT NULL,
+            body        TEXT    NOT NULL,
+            url         TEXT    NOT NULL DEFAULT '/',
+            property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+            sent        INTEGER NOT NULL DEFAULT 0,
+            failed      INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_notifications_office ON notifications(office_id, created_at);
+
+        -- Rebuild FTS to also index the project / compound name (e.g. Dream City, Italian Village)
+        DROP TRIGGER properties_ai;
+        DROP TRIGGER properties_ad;
+        DROP TRIGGER properties_au;
+        DROP TABLE properties_fts;
+        CREATE VIRTUAL TABLE properties_fts USING fts5(
+            title, description, district, address, project,
+            content='properties', content_rowid='id', tokenize='unicode61 remove_diacritics 2'
+        );
+        CREATE TRIGGER properties_ai AFTER INSERT ON properties BEGIN
+            INSERT INTO properties_fts(rowid, title, description, district, address, project)
+            VALUES (new.id, new.title, new.description, new.district, new.address, new.project);
+        END;
+        CREATE TRIGGER properties_ad AFTER DELETE ON properties BEGIN
+            INSERT INTO properties_fts(properties_fts, rowid, title, description, district, address, project)
+            VALUES ('delete', old.id, old.title, old.description, old.district, old.address, old.project);
+        END;
+        CREATE TRIGGER properties_au AFTER UPDATE OF title, description, district, address, project ON properties BEGIN
+            INSERT INTO properties_fts(properties_fts, rowid, title, description, district, address, project)
+            VALUES ('delete', old.id, old.title, old.description, old.district, old.address, old.project);
+            INSERT INTO properties_fts(rowid, title, description, district, address, project)
+            VALUES (new.id, new.title, new.description, new.district, new.address, new.project);
+        END;
+        INSERT INTO properties_fts(properties_fts) VALUES ('rebuild');
+        SQL,
     ];
 }

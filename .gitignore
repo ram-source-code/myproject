@@ -1,8 +1,10 @@
 /data/*.sqlite
 /data/*.sqlite-wal
 /data/*.sqlite-shm
-/public/uploads/*
-!/public/uploads/.htaccess
-!/public/uploads/.gitkeep
+/data/vapid.json
+/uploads/*
+!/uploads/.htaccess
+!/uploads/.gitkeep
 /vendor/
+/node_modules/
 .DS_Store
