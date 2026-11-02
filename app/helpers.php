@@ -10,7 +10,8 @@ function config(string $key, $default = null)
     return $cfg[$key] ?? $default;
 }
 
-const SUPPORTED_LANGS = ['ar', 'en'];
+const SUPPORTED_LANGS = ['ckb', 'ar', 'en'];
+const LANG_NAMES = ['ckb' => 'کوردی', 'ar' => 'العربية', 'en' => 'English'];
 
 function lang(): string
 {
@@ -25,7 +26,7 @@ function lang(): string
 
 function dir_attr(): string
 {
-    return lang() === 'ar' ? 'rtl' : 'ltr';
+    return lang() === 'en' ? 'ltr' : 'rtl';
 }
 
 /** Translate a key, with optional :placeholder replacements (values are NOT escaped). */
@@ -34,7 +35,11 @@ function t(string $key, array $replace = []): string
     static $strings = [];
     $l = lang();
     $strings[$l] ??= require __DIR__ . "/lang/{$l}.php";
-    $s = $strings[$l][$key] ?? $key;
+    $s = $strings[$l][$key] ?? null;
+    if ($s === null) { // fall back to English, then the key itself
+        $strings['en'] ??= require __DIR__ . '/lang/en.php';
+        $s = $strings['en'][$key] ?? $key;
+    }
     foreach ($replace as $k => $v) {
         $s = str_replace(':' . $k, (string) $v, $s);
     }
@@ -43,7 +48,11 @@ function t(string $key, array $replace = []): string
 
 function app_name(): string
 {
-    return lang() === 'ar' ? config('app_name') : config('app_name_en');
+    return match (lang()) {
+        'ckb' => config('app_name_ku'),
+        'ar' => config('app_name'),
+        default => config('app_name_en'),
+    };
 }
 
 // ───────────────────────── Output ─────────────────────────
@@ -53,28 +62,100 @@ function e($value): string
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/**
+ * URL path prefix of the install folder: '' at the domain root, '/aqarat' for example.com/aqarat/.
+ * Taken from AQARAT_APP_URL when set, otherwise detected from the front controller's location.
+ */
+function base_path(): string
+{
+    static $base = null;
+    if ($base !== null) {
+        return $base;
+    }
+    $cfg = (string) config('app_url');
+    if ($cfg !== '') {
+        $base = rtrim((string) (parse_url($cfg, PHP_URL_PATH) ?? ''), '/');
+    } elseif (PHP_SAPI === 'cli') {
+        $base = '';
+    } else {
+        $dir = str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php')));
+        $base = rtrim($dir, '/.');
+    }
+    // Only allow a plain path (defensive: SCRIPT_NAME is server-controlled, but keep it clean)
+    if (!preg_match('#^(/[A-Za-z0-9._~%-]+)*$#', $base)) {
+        $base = '';
+    }
+    return $base;
+}
+
+/** Request path relative to the install folder, always starting with '/'. */
+function current_path(): string
+{
+    $path = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+    $base = base_path();
+    if ($base !== '' && ($path === $base || str_starts_with($path, $base . '/'))) {
+        $path = substr($path, strlen($base));
+    }
+    return '/' . trim($path, '/');
+}
+
 function url(string $path = '/', array $query = []): string
 {
     $q = array_filter($query, static fn($v) => $v !== null && $v !== '' && $v !== []);
-    return config('app_url') . '/' . ltrim($path, '/') . ($q ? '?' . http_build_query($q) : '');
+    return base_path() . '/' . ltrim($path, '/') . ($q ? '?' . http_build_query($q) : '');
 }
 
 function asset(string $path): string
 {
-    $file = dirname(__DIR__) . '/public/assets/' . ltrim($path, '/');
+    $file = dirname(__DIR__) . '/assets/' . ltrim($path, '/');
     $v = is_file($file) ? substr(md5((string) filemtime($file)), 0, 8) : '0';
     return url('assets/' . ltrim($path, '/')) . '?v=' . $v;
 }
 
 function upload_url(string $file): string
 {
-    return config('app_url') . config('upload_url') . '/' . rawurlencode($file);
+    return base_path() . '/uploads/' . rawurlencode($file);
 }
 
-function money(int|float $amount): string
+const CURRENCIES = ['USD', 'IQD'];
+
+function money(int|float $amount, string $currency = 'USD'): string
 {
     $n = number_format((float) $amount, 0, '.', ',');
-    return lang() === 'ar' ? $n . ' ' . t('currency') : t('currency') . ' ' . $n;
+    if ($currency === 'IQD') {
+        return lang() === 'en' ? $n . ' IQD' : $n . ' ' . t('iqd_short');
+    }
+    return '$' . $n;
+}
+
+function to_usd(int $price, string $currency): int
+{
+    return $currency === 'IQD' ? (int) round($price / max(1, (int) config('iqd_per_usd'))) : $price;
+}
+
+/** Normalise an Iraqi phone number to international digits (9647XXXXXXXXX) for wa.me / tel: links. */
+function phone_intl(string $phone): string
+{
+    $d = preg_replace('/\D+/', '', convert_arabic_digits($phone)) ?? '';
+    if (str_starts_with($d, '00')) {
+        $d = substr($d, 2);
+    }
+    if (str_starts_with($d, '0')) {
+        $d = '964' . substr($d, 1);
+    } elseif (strlen($d) === 10 && $d[0] === '7') {
+        $d = '964' . $d;
+    }
+    return $d;
+}
+
+function whatsapp_url(string $phone, string $text = ''): string
+{
+    return 'https://wa.me/' . phone_intl($phone) . ($text !== '' ? '?text=' . rawurlencode($text) : '');
+}
+
+function valid_phone(string $phone): bool
+{
+    return (bool) preg_match('/^\+?[0-9\s\-()]{7,20}$/', convert_arabic_digits($phone));
 }
 
 function fmt_date(string $sqlDate): string
@@ -192,7 +273,10 @@ function input_float(string $key, ?float $default = null): ?float
 
 function convert_arabic_digits(string $s): string
 {
-    return strtr($s, ['٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9']);
+    return strtr($s, [
+        '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+    ]);
 }
 
 function str_limit(string $s, int $len): string
@@ -208,7 +292,7 @@ function start_session(): void
     session_name(config('session_name'));
     session_set_cookie_params([
         'lifetime' => 0,
-        'path'     => '/',
+        'path'     => base_path() . '/',
         'secure'   => $secure,
         'httponly' => true,
         'samesite' => 'Lax',
@@ -370,10 +454,11 @@ function is_admin(): bool
 
 // ───────────────────────── Domain helpers ─────────────────────────
 
-const PROPERTY_TYPES = ['apartment', 'villa', 'house', 'land', 'office', 'shop', 'building', 'warehouse', 'chalet', 'farm'];
+const PROPERTY_TYPES = ['house', 'apartment', 'villa', 'land', 'shop', 'office', 'building', 'warehouse', 'farm', 'chalet'];
+const DEED_TYPES = ['tapo', 'agricultural', 'investment', 'other'];
 const PROPERTY_PURPOSES = ['sale', 'rent'];
 const RENT_PERIODS = ['monthly', 'yearly', 'daily'];
-const PROPERTY_FEATURES = ['parking', 'elevator', 'pool', 'garden', 'balcony', 'maid_room', 'driver_room', 'ac', 'kitchen', 'security', 'gym', 'basement', 'roof', 'sea_view'];
+const PROPERTY_FEATURES = ['parking', 'elevator', 'generator', 'solar', 'water_tank', 'garden', 'balcony', 'pool', 'ac', 'kitchen', 'security', 'gym', 'basement', 'roof', 'mountain_view', 'gated'];
 const PROPERTY_STATUSES = ['pending', 'published', 'rejected', 'sold'];
 
 function cities(): array
@@ -387,12 +472,17 @@ function city_name(?array $row): string
     if (!$row) {
         return '';
     }
-    return lang() === 'ar' ? ($row['city_ar'] ?? $row['name_ar'] ?? '') : ($row['city_en'] ?? $row['name_en'] ?? '');
+    $name = match (lang()) {
+        'ckb' => $row['city_ku'] ?? $row['name_ku'] ?? '',
+        'ar' => $row['city_ar'] ?? $row['name_ar'] ?? '',
+        default => '',
+    };
+    return $name !== '' ? $name : ($row['city_en'] ?? $row['name_en'] ?? '');
 }
 
 function price_label(array $p): string
 {
-    $s = money((int) $p['price']);
+    $s = money((int) $p['price'], $p['currency'] ?? 'USD');
     if ($p['purpose'] === 'rent' && !empty($p['rent_period'])) {
         $s .= ' / ' . t('period_' . $p['rent_period']);
     }

@@ -7,6 +7,7 @@ require __DIR__ . '/helpers.php';
 require __DIR__ . '/db.php';
 require __DIR__ . '/image.php';
 require __DIR__ . '/models.php';
+require __DIR__ . '/push.php';
 
 date_default_timezone_set(config('timezone', 'UTC'));
 mb_internal_encoding('UTF-8');
@@ -43,7 +44,7 @@ set_error_handler(static function (int $no, string $str, string $file, int $line
 
 if (PHP_SAPI !== 'cli') {
     header_remove('X-Powered-By');
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');

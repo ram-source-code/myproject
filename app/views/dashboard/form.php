@@ -66,8 +66,15 @@ $errs = errors();
                 </div>
                 <div class="grid-2">
                     <div class="field">
-                        <label for="f-price"><?= e(t('field_price')) ?> (<?= e(t('currency')) ?>)</label>
-                        <input id="f-price" name="price" type="number" inputmode="numeric" min="0" step="1" required value="<?= e($v('price')) ?>"<?= field_aria('price') ?>>
+                        <label for="f-price"><?= e(t('field_price')) ?></label>
+                        <div class="input-group">
+                            <input id="f-price" name="price" type="number" inputmode="numeric" min="0" step="1" required value="<?= e($v('price')) ?>"<?= field_aria('price') ?>>
+                            <label for="f-currency" class="visually-hidden"><?= e(t('currency_label')) ?></label>
+                            <select id="f-currency" name="currency">
+                                <option value="USD" <?= $v('currency', 'USD') === 'USD' ? 'selected' : '' ?>>$ USD</option>
+                                <option value="IQD" <?= $v('currency') === 'IQD' ? 'selected' : '' ?>><?= e(t('iqd_short')) ?> IQD</option>
+                            </select>
+                        </div>
                         <?= field_error('price') ?>
                     </div>
                     <div class="field" data-rent-only>
@@ -102,22 +109,31 @@ $errs = errors();
                     </div>
                     <div class="field">
                         <label for="f-district"><?= e(t('field_district')) ?></label>
-                        <input id="f-district" name="district" maxlength="100" value="<?= e($v('district')) ?>">
+                        <input id="f-district" name="district" maxlength="100" value="<?= e($v('district')) ?>" placeholder="<?= e(t('district_ph')) ?>">
                     </div>
+                </div>
+                <div class="field">
+                    <label for="f-project"><?= e(t('field_project')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
+                    <input id="f-project" name="project" maxlength="100" value="<?= e($v('project')) ?>" placeholder="<?= e(t('project_ph')) ?>">
                 </div>
                 <div class="field">
                     <label for="f-address"><?= e(t('field_address')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
                     <input id="f-address" name="address" maxlength="200" autocomplete="street-address" value="<?= e($v('address')) ?>">
                 </div>
+                <div class="field">
+                    <p class="field-label"><?= e(t('pin_on_map')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></p>
+                    <div class="picker-map" data-picker-map data-center="<?= e(implode(',', config('map_center'))) ?>" role="application" aria-label="<?= e(t('pin_on_map')) ?>"></div>
+                    <p class="hint"><?= e(t('pin_hint')) ?></p>
+                </div>
                 <div class="grid-2">
                     <div class="field">
                         <label for="f-lat"><?= e(t('field_lat')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
-                        <input id="f-lat" name="lat" inputmode="decimal" dir="ltr" placeholder="24.7136" value="<?= e($v('lat')) ?>"<?= field_aria('lat') ?>>
+                        <input id="f-lat" name="lat" inputmode="decimal" dir="ltr" placeholder="36.1911" value="<?= e($v('lat')) ?>"<?= field_aria('lat') ?>>
                         <?= field_error('lat') ?>
                     </div>
                     <div class="field">
                         <label for="f-lng"><?= e(t('field_lng')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
-                        <input id="f-lng" name="lng" inputmode="decimal" dir="ltr" placeholder="46.6753" value="<?= e($v('lng')) ?>"<?= field_aria('lng') ?>>
+                        <input id="f-lng" name="lng" inputmode="decimal" dir="ltr" placeholder="44.0092" value="<?= e($v('lng')) ?>"<?= field_aria('lng') ?>>
                         <?= field_error('lng') ?>
                     </div>
                 </div>
@@ -150,6 +166,15 @@ $errs = errors();
                         <label for="f-year_built"><?= e(t('field_year_built')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
                         <input id="f-year_built" name="year_built" type="number" inputmode="numeric" min="1900" max="<?= (int) date('Y') + 5 ?>" value="<?= e($v('year_built')) ?>"<?= field_aria('year_built') ?>>
                         <?= field_error('year_built') ?>
+                    </div>
+                    <div class="field">
+                        <label for="f-deed"><?= e(t('deed')) ?></label>
+                        <select id="f-deed" name="deed">
+                            <option value=""><?= e(t('choose')) ?></option>
+                            <?php foreach (DEED_TYPES as $dt): ?>
+                                <option value="<?= $dt ?>" <?= $v('deed') === $dt ? 'selected' : '' ?>><?= e(t('deed_' . $dt)) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <label class="check check-boxed">
                         <input type="checkbox" name="furnished" value="1" <?= $furnished ? 'checked' : '' ?>>

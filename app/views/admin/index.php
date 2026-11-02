@@ -46,8 +46,8 @@
                 <ul class="bar-list">
                     <?php foreach ($byCity as $r): ?>
                         <li>
-                            <span class="bar-label"><?= e(lang() === 'ar' ? $r['name_ar'] : $r['name_en']) ?></span>
-                            <meter min="0" max="<?= $max ?>" value="<?= (int) $r['n'] ?>" aria-label="<?= e(lang() === 'ar' ? $r['name_ar'] : $r['name_en']) ?>"></meter>
+                            <span class="bar-label"><?= e(city_name($r)) ?></span>
+                            <meter min="0" max="<?= $max ?>" value="<?= (int) $r['n'] ?>" aria-label="<?= e(city_name($r)) ?>"></meter>
                             <span class="bar-value"><?= (int) $r['n'] ?></span>
                         </li>
                     <?php endforeach; ?>

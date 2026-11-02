@@ -48,10 +48,10 @@ function normalize_files(?array $f): array
 }
 
 /**
- * @return array{filename:string, thumb:string, width:int, height:int}
+ * Validate an uploaded file and decode it into a truecolor GD image (steps 1–4).
  * @throws ImageUploadException
  */
-function process_image_upload(array $file): array
+function load_uploaded_image(array $file, int $minW = 200, int $minH = 150): GdImage
 {
     if (!function_exists('imagewebp')) {
         throw new ImageUploadException(t('img_no_webp'));
@@ -86,7 +86,7 @@ function process_image_upload(array $file): array
         throw new ImageUploadException(t('img_bad_type'));
     }
     [$w, $h] = $info;
-    if ($w < 200 || $h < 150) {
+    if ($w < $minW || $h < $minH) {
         throw new ImageUploadException(t('img_too_small'));
     }
     if ($w * $h > config('max_pixels')) {
@@ -109,7 +109,43 @@ function process_image_upload(array $file): array
     if (!imageistruecolor($src)) {
         imagepalettetotruecolor($src); // GIF/8-bit PNG → truecolor, required by imagewebp
     }
+    return $src;
+}
 
+function ensure_upload_dir(): string
+{
+    $dir = config('upload_dir');
+    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+        throw new ImageUploadException(t('img_failed'));
+    }
+    return $dir;
+}
+
+/** Office logo: square, cover-cropped, 256×256 WebP. Returns the stored filename. */
+function process_logo_upload(array $file): string
+{
+    $src = load_uploaded_image($file, 64, 64);
+    $dir = ensure_upload_dir();
+    $logo = resize_cover($src, 256, 256);
+    imagedestroy($src);
+    $name = bin2hex(random_bytes(16)) . '.webp';
+    $ok = imagewebp($logo, $dir . '/' . $name, (int) config('webp_quality'));
+    imagedestroy($logo);
+    if (!$ok) {
+        @unlink($dir . '/' . $name);
+        throw new ImageUploadException(t('img_failed'));
+    }
+    return $name;
+}
+
+/**
+ * Property photo: full size (fit 1600×1200) + 640×427 thumbnail, both WebP.
+ * @return array{filename:string, thumb:string, width:int, height:int}
+ * @throws ImageUploadException
+ */
+function process_image_upload(array $file): array
+{
+    $src = load_uploaded_image($file);
     $dir = config('upload_dir');
     if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
         imagedestroy($src);

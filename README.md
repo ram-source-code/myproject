@@ -1,91 +1,95 @@
-# عقارات · Aqarat
+# عەقارات · Aqarat — Kurdistan real estate
 
-A real-estate marketplace web app (sale and rent) in plain **PHP 8.1+, HTML, CSS and vanilla JS**, with **SQLite in WAL mode** and a **GD image pipeline that converts every upload to WebP**. It needs no frameworks and no Composer.
+A property marketplace for **Kurdistan** in plain **PHP 8.1+, HTML, CSS and vanilla JS**:
+**SQLite (WAL mode)**, a **GD pipeline that converts every upload to WebP**, an **installable PWA**,
+and **Web Push notifications** from real-estate offices (نوسینگە) to the people who follow them.
+No frameworks, no Composer, no build step.
 
-Arabic (RTL) is the default language, and English (LTR) is one click away. It supports light and dark mode.
+Languages: **کوردی (Sorani, default)**, العربية and English — RTL/LTR handled automatically.
 
-## Features
+## Highlights
 
-**Visitors**
-- Home page with hero search, live stats, browsing by property type, and featured and latest listings
-- Search page:
-  - Full-text keyword search (SQLite FTS5, Arabic-aware)
-  - Filters: purpose, type, city, price range, bedrooms, bathrooms, minimum area, furnished
-  - Five sort orders and pagination
-- Property page:
-  - Photo gallery with a full-screen lightbox (keyboard, swipe, RTL-aware arrows)
-  - Facts, features, description, OpenStreetMap link and similar listings
-- Contact form with a honeypot field and per-IP rate limiting
-- Click-to-call button for the advertiser
+| For people | For real-estate offices (نوسینگە) | For the site admin |
+|---|---|---|
+| Search by city, type, price (USD or IQD), rooms, area, **tapo / title-deed** type | Office page with logo, about, phone, WhatsApp, verified badge | Moderation queue (approve / reject / feature) |
+| **Map view** with price pins (Leaflet + OpenStreetMap, self-hosted JS) | Publish listings with drag-and-drop photos and a **map pin picker** | Verify offices, manage users and cities (Kurdish/Arabic/English names) |
+| Quick-filter chips, list/map toggle, recently viewed | **Notify followers** with a push notification (5/day limit) | **Broadcast** to everyone who enabled announcements |
+| **Follow an office with one tap — no account needed** | Followers are notified automatically when a listing goes live | Notification log with delivery counts |
+| WhatsApp & call buttons, sticky contact bar on mobile | Enquiries inbox | Database mode / stats overview |
+| Install as an app, works offline for pages already visited | | |
 
-**Registered users / agents**
-- Create, edit and delete listings, and mark them sold or rented
-- Upload multiple photos by drag-and-drop with previews, then set a cover photo or delete photos
-- Favourites (saved without a page reload), an enquiries inbox with read/unread state, and profile and password settings
+## Install in a sub-folder (e.g. `public_html/aqarat/` → `example.com/aqarat/`)
 
-**Admins**
-- Overview stats and a moderation queue: approve, reject or feature listings
-- Manage users (role, suspend) and cities
+1. Upload the whole folder to `public_html/aqarat/`. `index.php` in that folder is the entry point.
+2. Make `data/` and `uploads/` writable by PHP.
+3. Initialise the database. If you have SSH:
 
-## Image pipeline (`app/image.php`)
-1. Checks the PHP upload: error code, `is_uploaded_file` and size (8 MB per file by default).
-2. Detects the real MIME type with `finfo`, which must match `getimagesize()`. JPEG, PNG, GIF and WebP are allowed.
-3. Rejects images that are too small, or larger than 40 MP (decompression bombs), *before* decoding.
-4. Decodes with GD and fixes JPEG EXIF orientation.
-5. Resizes the image to fit 1600×1200 and makes a 640×427 cover-cropped thumbnail.
-6. **Re-encodes both to WebP.** This strips EXIF/GPS metadata and any payload hidden in the original file, such as a polyglot.
-7. Saves the files under random 128-bit names. The uploads folder is configured never to execute code.
+   ```bash
+   cd public_html/aqarat
+   ```
+
+   ```bash
+   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a-strong-password' php bin/seed.php
+   ```
+
+   Add `--demo` to load demo offices and listings.
+
+   **No SSH?** Open `https://example.com/aqarat/install` instead: it checks the server requirements,
+   adds the Kurdistan cities and creates the admin account. The installer disables itself as soon as
+   an admin exists — run it right after uploading.
+4. Open `https://example.com/aqarat/`.
+
+The install folder is **auto-detected**, so the same files also work at the domain root or in any other
+folder. Set `AQARAT_APP_URL=https://example.com/aqarat` if you sit behind a proxy — it is also used
+to build absolute links inside push notifications.
+
+**Apache / cPanel:** the included `.htaccess` files route requests to `index.php` and block access to
+`app/`, `data/`, `bin/`, `tests/`, `deploy/`, `*.md` and `*.sqlite`. `uploads/` never executes code.
+**nginx:** see `deploy/nginx.conf`. Recommended PHP settings: `deploy/php.ini`.
+
+**HTTPS is required** for the PWA and push notifications (browsers only allow them on secure origins
+and on `localhost`).
+
+## Push notifications (Web Push)
+- Pure PHP implementation of **VAPID (ES256 JWT)** and **RFC 8291 aes128gcm** payload encryption using
+  `openssl` and `curl` — no Composer packages. Keys are generated on first use in `data/vapid.json`
+  (outside the web root). Back this file up: changing it invalidates all subscriptions.
+- People tap **Follow** on an office; the browser asks for permission and the device subscription is
+  stored (no account needed). The **Notifications** page lets them manage follows and announcements.
+- Only real push-service hosts (FCM, Mozilla, Apple, WNS) are accepted as endpoints (SSRF protection).
+  Expired subscriptions (404/410) are removed automatically.
+- iPhone/iPad: notifications work when the site is **added to the Home Screen** (iOS 16.4+); the site
+  shows this hint automatically.
+
+## Images (`app/image.php`)
+MIME sniffed with `finfo` + `getimagesize`, dimension and pixel limits checked before decoding, EXIF
+orientation fixed, resized (1600×1200 max + 640×427 thumbnail; logos 256×256), **re-encoded to WebP**
+(strips metadata/GPS and any embedded payload), saved under random names.
 
 ## Database (`app/db.php`)
-- `PRAGMA journal_mode = WAL`, `synchronous = NORMAL`, `foreign_keys = ON`, `busy_timeout = 5000`
-- Migrations are versioned with `PRAGMA user_version` and run automatically on the first request.
-- The database file is in `data/`, **outside the web root**.
+`journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`; versioned migrations
+via `PRAGMA user_version`; FTS5 full-text search over title, description, district, address and project.
 
-## Security
-- CSRF token on every POST, session cookie set to `HttpOnly` and `SameSite=Lax`, session ID regenerated on login and on password change
-- All SQL uses bound parameters; FTS search terms are quoted
-- All output is escaped with `e()`
-- Strict CSP (`script-src 'self'`, no inline scripts or styles), `X-Frame-Options`, `nosniff`, Referrer and Permissions policies
-- Passwords stored with `password_hash`; login throttled per IP and per email; login takes the same time whether or not the email exists
-- Every edit, delete and photo action checks that the user owns the listing. Pending and rejected listings return 404 to the public.
-- Moderation: new listings, and edits to published ones, by non-admin users go back to review
-
-## Quick start
-
-```bash
-php bin/seed.php --demo            # creates DB (WAL), cities, an admin (password printed) + 24 demo listings
-```
-
-```bash
-php -S 127.0.0.1:8080 -t public public/index.php
-```
-
-Open http://127.0.0.1:8080. To choose the admin credentials yourself, set them when seeding:
-
-```bash
-ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a-strong-password' php bin/seed.php
-```
-
-**Requirements:** PHP ≥ 8.1 with `pdo_sqlite` (FTS5), `gd` built with WebP support, `fileinfo`; `exif` is optional.
-
-## Deployment
-- Point the web server's document root at **`public/`**.
-- **Apache:** the included `.htaccess` files handle routing and lock down `uploads/` and `data/`.
-- **nginx:** see `deploy/nginx.conf`.
-- Recommended PHP settings are in `deploy/php.ini` (`upload_max_filesize`, `post_max_size`, `memory_limit` for GD).
-- The PHP user needs write access to `data/` (the database plus its `-wal`/`-shm` files) and `public/uploads/`.
-- Configure through environment variables: `AQARAT_APP_URL`, `AQARAT_DEBUG`, `AQARAT_CURRENCY`, `AQARAT_LANG`, `AQARAT_DB_PATH`, `AQARAT_REQUIRE_APPROVAL`. See `app/config.php`.
+## Configuration (environment variables)
+`AQARAT_APP_URL`, `AQARAT_LANG` (ckb/ar/en), `AQARAT_IQD_PER_USD` (default 1450, used to compare IQD
+prices), `AQARAT_PUSH_SUBJECT` (mailto: contact for push services), `AQARAT_REQUIRE_APPROVAL`,
+`AQARAT_DEBUG`, `AQARAT_DB_PATH`. See `app/config.php`.
 
 ## Tests
-`tests/e2e.py` runs 29 functional and security checks against a running server: CSRF, IDOR, XSS escaping, upload rejection, WebP output, moderation and throttling. The setup steps are at the top of the file.
+- `php tests/push_test.php` — Web Push crypto: encrypt/decrypt round-trip, VAPID signature, SSRF guard.
+- `tests/e2e.py` — functional + security checks (subfolder routing, languages, offices, follow/push,
+  IDOR, CSRF, XSS, uploads, moderation, throttling). Setup instructions at the top of the file.
 
 ## Layout
 ```
-app/            bootstrap, config, db (WAL + migrations), helpers, image pipeline, models, routes
-app/controllers public / auth / dashboard / admin
-app/views       PHP templates (layout, partials, pages)
-app/lang        ar.php, en.php
-public/         front controller, assets (css/js/img), uploads/
-bin/seed.php    initial data + demo listings with generated photos
-deploy/         nginx + php.ini samples
+index.php        front controller (entry point of the install folder)
+sw.js            service worker (offline + push)
+.htaccess        routing + protection of internal folders
+app/             bootstrap, config, db, helpers, image, push, models, routes, controllers, views, lang
+assets/          css, js, img (PWA icons), vendor/leaflet
+uploads/         WebP images (generated)
+data/            SQLite database + VAPID keys (generated, protected)
+bin/             seed.php, make-icons.php
+deploy/          nginx + php.ini samples
+tests/           push_test.php, e2e.py
 ```

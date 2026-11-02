@@ -26,12 +26,20 @@ $headingTag = $headingTag ?? 'h3';
             <svg aria-hidden="true"><use href="#i-pin"></use></svg>
             <?= e(implode('، ', array_filter([$p['district'], city_name($p)]))) ?>
         </p>
+        <?php if (!empty($p['project'])): ?><p class="card-project"><?= e($p['project']) ?></p><?php endif; ?>
         <ul class="specs" aria-label="<?= e(t('specs')) ?>">
             <li><span class="spec-type"><?= e(t('type_' . $p['type'])) ?></span></li>
             <?php if ($p['bedrooms']): ?><li><svg aria-hidden="true"><use href="#i-bed"></use></svg><?= (int) $p['bedrooms'] ?> <span class="visually-hidden"><?= e(t('bedrooms')) ?></span></li><?php endif; ?>
             <?php if ($p['bathrooms']): ?><li><svg aria-hidden="true"><use href="#i-bath"></use></svg><?= (int) $p['bathrooms'] ?> <span class="visually-hidden"><?= e(t('bathrooms')) ?></span></li><?php endif; ?>
             <li><svg aria-hidden="true"><use href="#i-area"></use></svg><?= e(number_format((float) $p['area'])) ?> <?= e(t('sqm')) ?></li>
         </ul>
+        <?php if (!empty($p['office_name'])): ?>
+            <p class="card-office">
+                <?php if ($p['office_logo']): ?><img src="<?= e(upload_url($p['office_logo'])) ?>" alt="" width="22" height="22" loading="lazy"><?php else: ?><span class="avatar avatar-xs" aria-hidden="true"><?= e(mb_substr($p['office_name'], 0, 1)) ?></span><?php endif; ?>
+                <span><?= e($p['office_name']) ?></span>
+                <?php if ($p['office_verified']): ?><svg class="verified" aria-label="<?= e(t('verified')) ?>" role="img"><use href="#i-verified"></use></svg><?php endif; ?>
+            </p>
+        <?php endif; ?>
     </div>
     <form class="fav-form" method="post" action="<?= e(url('favorite/' . $p['id'])) ?>">
         <?= csrf_field() ?>

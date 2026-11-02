@@ -1,57 +1,32 @@
 <?php
-/** @var array $p @var array $images @var array $similar @var array $features */
+/** @var array $p @var array $images @var array $similar @var array $features @var ?array $office */
 $user = current_user();
 $isFav = in_array((int) $p['id'], favorite_ids(), true);
 $canManage = can_manage_property($p, $user);
 $location = implode('، ', array_filter([$p['address'], $p['district'], city_name($p)]));
+$contactPhone = ($office['phone'] ?? '') ?: (string) ($p['owner_phone'] ?? '');
+$contactWa = ($office['whatsapp'] ?? '') ?: $contactPhone;
+$waText = t('wa_message', ['title' => $p['title'], 'id' => $p['id']]) . ' ' . absolute_base_url() . '/property/' . (int) $p['id'];
+$isLive = $p['status'] === 'published';
 ?>
-<div class="container">
+<div class="container property-page" data-recent-item
+     data-id="<?= (int) $p['id'] ?>" data-title="<?= e($p['title']) ?>" data-price="<?= e(price_label($p)) ?>"
+     data-url="<?= e(url('property/' . $p['id'])) ?>" data-thumb="<?= e($p['cover_thumb'] ? upload_url($p['cover_thumb']) : '') ?>">
     <nav class="breadcrumbs" aria-label="<?= e(t('breadcrumbs')) ?>">
         <ol>
             <li><a href="<?= e(url('/')) ?>"><?= e(t('nav_home')) ?></a></li>
             <li><a href="<?= e(url('properties', ['purpose' => $p['purpose']])) ?>"><?= e(t('purpose_' . $p['purpose'])) ?></a></li>
-            <li><a href="<?= e(url('properties', ['purpose' => $p['purpose'], 'type' => $p['type']])) ?>"><?= e(t('type_' . $p['type'])) ?></a></li>
+            <?php if ($p['city_id']): ?><li><a href="<?= e(url('properties', ['purpose' => $p['purpose'], 'city' => $p['city_id']])) ?>"><?= e(city_name($p)) ?></a></li><?php endif; ?>
             <li aria-current="page"><?= e(str_limit($p['title'], 40)) ?></li>
         </ol>
     </nav>
 
-    <?php if ($p['status'] !== 'published'): ?>
+    <?php if (!$isLive): ?>
         <div class="alert alert-<?= $p['status'] === 'sold' ? 'info' : 'warning' ?>">
             <svg aria-hidden="true"><use href="#i-alert"></use></svg>
             <p><?= e(t('status_notice_' . $p['status'])) ?></p>
         </div>
     <?php endif; ?>
-
-    <header class="property-head">
-        <div>
-            <div class="card-badges static">
-                <span class="badge badge-<?= e($p['purpose']) ?>"><?= e(t('purpose_' . $p['purpose'])) ?></span>
-                <span class="badge"><?= e(t('type_' . $p['type'])) ?></span>
-                <?php if ($p['is_featured']): ?><span class="badge badge-featured"><svg aria-hidden="true"><use href="#i-star"></use></svg><?= e(t('featured')) ?></span><?php endif; ?>
-            </div>
-            <h1 class="property-title"><?= e($p['title']) ?></h1>
-            <p class="card-location"><svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e($location) ?></p>
-        </div>
-        <div class="property-head-side">
-            <p class="property-price"><?= e(price_label($p)) ?></p>
-            <?php if ($p['purpose'] === 'sale' && $p['area'] > 0): ?>
-                <p class="muted small"><?= e(money((int) round($p['price'] / $p['area']))) ?> / <?= e(t('sqm')) ?></p>
-            <?php endif; ?>
-            <div class="head-actions">
-                <form method="post" action="<?= e(url('favorite/' . $p['id'])) ?>" class="fav-form-inline">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-outline btn-sm fav-toggle" aria-pressed="<?= $isFav ? 'true' : 'false' ?>">
-                        <svg aria-hidden="true"><use href="#i-heart"></use></svg>
-                        <span data-fav-label><?= e($isFav ? t('fav_remove') : t('fav_add')) ?></span>
-                    </button>
-                </form>
-                <button type="button" class="btn btn-outline btn-sm" data-share data-title="<?= e($p['title']) ?>"><?= e(t('share')) ?></button>
-                <?php if ($canManage): ?>
-                    <a class="btn btn-outline btn-sm" href="<?= e(url('dashboard/properties/' . $p['id'] . '/edit')) ?>"><svg aria-hidden="true"><use href="#i-edit"></use></svg><?= e(t('edit')) ?></a>
-                <?php endif; ?>
-            </div>
-        </div>
-    </header>
 
     <?php if ($images): ?>
         <section class="gallery" data-count="<?= min(5, count($images)) ?>" aria-label="<?= e(t('photos')) ?>" data-gallery>
@@ -93,6 +68,40 @@ $location = implode('، ', array_filter([$p['address'], $p['district'], city_nam
         <div class="gallery-empty"><svg aria-hidden="true"><use href="#i-image"></use></svg><p><?= e(t('no_photos')) ?></p></div>
     <?php endif; ?>
 
+    <header class="property-head">
+        <div>
+            <div class="card-badges static">
+                <span class="badge badge-<?= e($p['purpose']) ?>"><?= e(t('purpose_' . $p['purpose'])) ?></span>
+                <span class="badge"><?= e(t('type_' . $p['type'])) ?></span>
+                <?php if ($p['deed']): ?><span class="badge badge-deed"><svg aria-hidden="true"><use href="#i-doc"></use></svg><?= e(t('deed_' . $p['deed'])) ?></span><?php endif; ?>
+                <?php if ($p['is_featured']): ?><span class="badge badge-featured"><svg aria-hidden="true"><use href="#i-star"></use></svg><?= e(t('featured')) ?></span><?php endif; ?>
+            </div>
+            <h1 class="property-title"><?= e($p['title']) ?></h1>
+            <p class="card-location"><svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e($location) ?><?php if ($p['project']): ?> · <strong><?= e($p['project']) ?></strong><?php endif; ?></p>
+        </div>
+        <div class="property-head-side">
+            <p class="property-price"><?= e(price_label($p)) ?></p>
+            <?php if ($p['currency'] === 'IQD'): ?>
+                <p class="muted small">≈ <?= e(money((int) $p['price_usd'])) ?></p>
+            <?php elseif ($p['purpose'] === 'sale' && $p['area'] > 0): ?>
+                <p class="muted small"><?= e(money((int) round($p['price'] / $p['area']))) ?> / <?= e(t('sqm')) ?></p>
+            <?php endif; ?>
+            <div class="head-actions">
+                <form method="post" action="<?= e(url('favorite/' . $p['id'])) ?>" class="fav-form-inline">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-outline btn-sm fav-toggle" aria-pressed="<?= $isFav ? 'true' : 'false' ?>">
+                        <svg aria-hidden="true"><use href="#i-heart"></use></svg>
+                        <span data-fav-label><?= e($isFav ? t('fav_remove') : t('fav_add')) ?></span>
+                    </button>
+                </form>
+                <button type="button" class="btn btn-outline btn-sm" data-share data-title="<?= e($p['title']) ?>"><?= e(t('share')) ?></button>
+                <?php if ($canManage): ?>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('dashboard/properties/' . $p['id'] . '/edit')) ?>"><svg aria-hidden="true"><use href="#i-edit"></use></svg><?= e(t('edit')) ?></a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </header>
+
     <div class="property-layout">
         <div class="property-main">
             <section class="panel" aria-labelledby="overview-h">
@@ -101,12 +110,13 @@ $location = implode('، ', array_filter([$p['address'], $p['district'], city_nam
                     <div><dt><svg aria-hidden="true"><use href="#i-area"></use></svg><?= e(t('area')) ?></dt><dd><?= e(number_format((float) $p['area'])) ?> <?= e(t('sqm')) ?></dd></div>
                     <?php if ($p['bedrooms']): ?><div><dt><svg aria-hidden="true"><use href="#i-bed"></use></svg><?= e(t('bedrooms')) ?></dt><dd><?= (int) $p['bedrooms'] ?></dd></div><?php endif; ?>
                     <?php if ($p['bathrooms']): ?><div><dt><svg aria-hidden="true"><use href="#i-bath"></use></svg><?= e(t('bathrooms')) ?></dt><dd><?= (int) $p['bathrooms'] ?></dd></div><?php endif; ?>
+                    <?php if ($p['deed']): ?><div><dt><svg aria-hidden="true"><use href="#i-doc"></use></svg><?= e(t('deed')) ?></dt><dd><?= e(t('deed_' . $p['deed'])) ?></dd></div><?php endif; ?>
                     <?php if ($p['floor'] !== null): ?><div><dt><?= e(t('floor')) ?></dt><dd><?= (int) $p['floor'] ?></dd></div><?php endif; ?>
                     <?php if ($p['year_built']): ?><div><dt><?= e(t('year_built')) ?></dt><dd><?= (int) $p['year_built'] ?></dd></div><?php endif; ?>
                     <div><dt><?= e(t('furnished')) ?></dt><dd><?= e($p['furnished'] ? t('yes') : t('no')) ?></dd></div>
                     <div><dt><?= e(t('listing_id')) ?></dt><dd>#<?= (int) $p['id'] ?></dd></div>
                     <div><dt><svg aria-hidden="true"><use href="#i-eye"></use></svg><?= e(t('views')) ?></dt><dd><?= number_format((int) $p['views']) ?></dd></div>
-                    <div><dt><?= e(t('listed_on')) ?></dt><dd><time datetime="<?= e(fmt_date($p['created_at'])) ?>"><?= e(fmt_date($p['created_at'])) ?></time></dd></div>
+                    <div><dt><svg aria-hidden="true"><use href="#i-clock"></use></svg><?= e(t('listed_on')) ?></dt><dd><time datetime="<?= e(fmt_date($p['created_at'])) ?>"><?= e(fmt_date($p['created_at'])) ?></time></dd></div>
                 </dl>
             </section>
 
@@ -131,12 +141,13 @@ $location = implode('، ', array_filter([$p['address'], $p['district'], city_nam
             <?php if ($p['lat'] !== null && $p['lng'] !== null): ?>
             <section class="panel" aria-labelledby="map-h">
                 <h2 id="map-h" class="panel-title"><?= e(t('location')) ?></h2>
-                <p class="muted"><?= e($location) ?></p>
-                <a class="btn btn-outline" target="_blank" rel="noopener noreferrer"
-                   href="https://www.openstreetmap.org/?mlat=<?= e($p['lat']) ?>&amp;mlon=<?= e($p['lng']) ?>#map=16/<?= e($p['lat']) ?>/<?= e($p['lng']) ?>">
-                    <svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e(t('open_map')) ?>
-                    <span class="visually-hidden">(<?= e(t('new_tab')) ?>)</span>
-                </a>
+                <div class="mini-map" data-mini-map data-lat="<?= e($p['lat']) ?>" data-lng="<?= e($p['lng']) ?>" role="region" aria-label="<?= e(t('map') . ': ' . $location) ?>"></div>
+                <p class="map-actions">
+                    <a class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer"
+                       href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= e($p['lat']) ?>,<?= e($p['lng']) ?>">
+                        <svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e(t('directions')) ?><span class="visually-hidden"> (<?= e(t('new_tab')) ?>)</span>
+                    </a>
+                </p>
             </section>
             <?php endif; ?>
         </div>
@@ -144,45 +155,65 @@ $location = implode('، ', array_filter([$p['address'], $p['district'], city_nam
         <aside class="property-aside" id="contact" aria-labelledby="contact-h">
             <div class="panel contact-card">
                 <h2 id="contact-h" class="panel-title"><?= e(t('contact_advertiser')) ?></h2>
-                <div class="owner">
-                    <span class="avatar" aria-hidden="true"><?= e(mb_substr($p['owner_name'], 0, 1)) ?></span>
-                    <div>
-                        <p class="owner-name"><?= e($p['owner_name']) ?></p>
-                        <p class="muted small"><?= e(t('role_' . $p['owner_role'])) ?></p>
-                    </div>
-                </div>
-                <?php if ($p['owner_phone'] && $p['status'] === 'published'): ?>
-                    <a class="btn btn-primary btn-block" href="tel:<?= e(preg_replace('/[^0-9+]/', '', $p['owner_phone'])) ?>">
-                        <svg aria-hidden="true"><use href="#i-phone"></use></svg><span dir="ltr"><?= e($p['owner_phone']) ?></span>
+                <?php if ($office): ?>
+                    <a class="owner owner-link" href="<?= e(url('office/' . $office['id'])) ?>">
+                        <?php if ($office['logo']): ?><img class="owner-logo" src="<?= e(upload_url($office['logo'])) ?>" alt="" width="52" height="52"><?php else: ?><span class="avatar" aria-hidden="true"><?= e(mb_substr($office['name'], 0, 1)) ?></span><?php endif; ?>
+                        <span>
+                            <span class="owner-name"><?= e($office['name']) ?><?php if ($office['is_verified']): ?> <svg class="verified" aria-label="<?= e(t('verified')) ?>" role="img"><use href="#i-verified"></use></svg><?php endif; ?></span>
+                            <span class="muted small d-block"><?= e(t('office')) ?> · <?= e(t('n_listings', ['n' => (int) $office['listings']])) ?></span>
+                        </span>
                     </a>
+                    <?= render_partial('partials/follow_button', ['o' => $office, 'block' => true]) ?>
+                <?php else: ?>
+                    <div class="owner">
+                        <span class="avatar" aria-hidden="true"><?= e(mb_substr($p['owner_name'], 0, 1)) ?></span>
+                        <div>
+                            <p class="owner-name"><?= e($p['owner_name']) ?></p>
+                            <p class="muted small"><?= e(t('role_' . $p['owner_role'])) ?></p>
+                        </div>
+                    </div>
                 <?php endif; ?>
 
-                <?php if ($p['status'] === 'published' && !$canManage): ?>
-                <form method="post" action="<?= e(url('property/' . $p['id'] . '/inquiry')) ?>" class="stack" novalidate data-validate>
-                    <?= csrf_field() ?>
-                    <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
-                    <div class="field">
-                        <label for="iq-name"><?= e(t('your_name')) ?></label>
-                        <input id="iq-name" name="name" required minlength="2" maxlength="100" autocomplete="name" value="<?= e(old('name', $user['name'] ?? '')) ?>"<?= field_aria('name') ?>>
-                        <?= field_error('name') ?>
+                <?php if ($isLive && $contactPhone): ?>
+                    <div class="contact-buttons">
+                        <a class="btn btn-whatsapp" href="<?= e(whatsapp_url($contactWa, $waText)) ?>" target="_blank" rel="noopener noreferrer">
+                            <svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('whatsapp')) ?>
+                        </a>
+                        <a class="btn btn-primary" href="tel:+<?= e(phone_intl($contactPhone)) ?>">
+                            <svg aria-hidden="true"><use href="#i-phone"></use></svg><span dir="ltr"><?= e($contactPhone) ?></span>
+                        </a>
                     </div>
-                    <div class="field">
-                        <label for="iq-email"><?= e(t('email')) ?></label>
-                        <input id="iq-email" name="email" type="email" required maxlength="150" autocomplete="email" dir="ltr" value="<?= e(old('email', $user['email'] ?? '')) ?>"<?= field_aria('email') ?>>
-                        <?= field_error('email') ?>
-                    </div>
-                    <div class="field">
-                        <label for="iq-phone"><?= e(t('phone')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
-                        <input id="iq-phone" name="phone" type="tel" maxlength="30" autocomplete="tel" dir="ltr" value="<?= e(old('phone', $user['phone'] ?? '')) ?>"<?= field_aria('phone') ?>>
-                        <?= field_error('phone') ?>
-                    </div>
-                    <div class="field">
-                        <label for="iq-msg"><?= e(t('message')) ?></label>
-                        <textarea id="iq-msg" name="message" rows="4" required minlength="10" maxlength="2000"<?= field_aria('message') ?>><?= e(old('message', t('inquiry_default', ['id' => $p['id']]))) ?></textarea>
-                        <?= field_error('message') ?>
-                    </div>
-                    <button class="btn btn-outline btn-block" type="submit"><svg aria-hidden="true"><use href="#i-mail"></use></svg><?= e(t('send_inquiry')) ?></button>
-                </form>
+                <?php endif; ?>
+
+                <?php if ($isLive && !$canManage): ?>
+                <details class="inquiry-details"<?= errors() ? ' open' : '' ?>>
+                    <summary class="btn btn-outline btn-block"><svg aria-hidden="true"><use href="#i-mail"></use></svg><?= e(t('send_inquiry')) ?></summary>
+                    <form method="post" action="<?= e(url('property/' . $p['id'] . '/inquiry')) ?>" class="stack" novalidate data-validate>
+                        <?= csrf_field() ?>
+                        <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+                        <div class="field">
+                            <label for="iq-name"><?= e(t('your_name')) ?></label>
+                            <input id="iq-name" name="name" required minlength="2" maxlength="100" autocomplete="name" value="<?= e(old('name', $user['name'] ?? '')) ?>"<?= field_aria('name') ?>>
+                            <?= field_error('name') ?>
+                        </div>
+                        <div class="field">
+                            <label for="iq-phone"><?= e(t('phone')) ?></label>
+                            <input id="iq-phone" name="phone" type="tel" maxlength="30" autocomplete="tel" dir="ltr" placeholder="0750 000 0000" value="<?= e(old('phone', $user['phone'] ?? '')) ?>"<?= field_aria('phone') ?>>
+                            <?= field_error('phone') ?>
+                        </div>
+                        <div class="field">
+                            <label for="iq-email"><?= e(t('email')) ?></label>
+                            <input id="iq-email" name="email" type="email" required maxlength="150" autocomplete="email" dir="ltr" value="<?= e(old('email', $user['email'] ?? '')) ?>"<?= field_aria('email') ?>>
+                            <?= field_error('email') ?>
+                        </div>
+                        <div class="field">
+                            <label for="iq-msg"><?= e(t('message')) ?></label>
+                            <textarea id="iq-msg" name="message" rows="4" required minlength="10" maxlength="2000"<?= field_aria('message') ?>><?= e(old('message', t('inquiry_default', ['id' => $p['id']]))) ?></textarea>
+                            <?= field_error('message') ?>
+                        </div>
+                        <button class="btn btn-primary btn-block" type="submit"><svg aria-hidden="true"><use href="#i-send"></use></svg><?= e(t('send')) ?></button>
+                    </form>
+                </details>
                 <?php endif; ?>
             </div>
         </aside>
@@ -200,3 +231,10 @@ $location = implode('، ', array_filter([$p['address'], $p['district'], city_nam
     <?php endif; ?>
 </div>
 
+<?php if ($isLive && $contactPhone && !$canManage): ?>
+<div class="sticky-contact" aria-label="<?= e(t('contact_advertiser')) ?>" role="region">
+    <p class="sticky-price"><?= e(price_label($p)) ?></p>
+    <a class="btn btn-whatsapp" href="<?= e(whatsapp_url($contactWa, $waText)) ?>" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('whatsapp')) ?></a>
+    <a class="btn btn-primary" href="tel:+<?= e(phone_intl($contactPhone)) ?>" aria-label="<?= e(t('call')) ?>"><svg aria-hidden="true"><use href="#i-phone"></use></svg><?= e(t('call')) ?></a>
+</div>
+<?php endif; ?>

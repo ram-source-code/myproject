@@ -39,6 +39,7 @@ function dash_property_new(): void
     require_login();
     render('dashboard/form', [
         'pageTitle' => t('add_listing') . ' — ' . app_name(),
+        'useMap'    => true,
         'p'         => null,
         'images'    => [],
         'active'    => 'new',
@@ -60,16 +61,19 @@ function dash_property_create(): void
     }
 
     $status = (config('require_approval') && !in_array($u['role'], ['admin'], true)) ? 'pending' : 'published';
-    db()->prepare('INSERT INTO properties (user_id, city_id, title, description, purpose, type, district, address, price, rent_period,
-            area, bedrooms, bathrooms, floor, year_built, furnished, features, lat, lng, status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$u['id'], $d['city_id'], $d['title'], $d['description'], $d['purpose'], $d['type'], $d['district'], $d['address'],
-            $d['price'], $d['rent_period'], $d['area'], $d['bedrooms'], $d['bathrooms'], $d['floor'], $d['year_built'],
-            $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status]);
+    db()->prepare('INSERT INTO properties (user_id, city_id, title, description, purpose, type, district, address, project, price, currency, price_usd,
+            rent_period, deed, area, bedrooms, bathrooms, floor, year_built, furnished, features, lat, lng, status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$u['id'], $d['city_id'], $d['title'], $d['description'], $d['purpose'], $d['type'], $d['district'], $d['address'], $d['project'],
+            $d['price'], $d['currency'], $d['price_usd'], $d['rent_period'], $d['deed'], $d['area'], $d['bedrooms'], $d['bathrooms'], $d['floor'],
+            $d['year_built'], $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status]);
     $id = (int) db()->lastInsertId();
 
     foreach (attach_uploaded_images($id, $files) as $msg) {
         flash('error', $msg);
+    }
+    if ($status === 'published' && ($p = find_property($id))) {
+        notify_new_listing($p);
     }
     clear_old();
     flash('success', $status === 'pending' ? t('listing_pending') : t('listing_created'));
@@ -91,6 +95,7 @@ function dash_property_edit(int $id): void
     $p = owned_property_or_404($id);
     render('dashboard/form', [
         'pageTitle' => t('edit_listing') . ' — ' . app_name(),
+        'useMap'    => true,
         'p'         => $p,
         'images'    => property_images($id),
         'active'    => 'listings',
@@ -114,12 +119,12 @@ function dash_property_update(int $id): void
         $status = 'pending';
     }
 
-    db()->prepare("UPDATE properties SET city_id=?, title=?, description=?, purpose=?, type=?, district=?, address=?, price=?, rent_period=?,
-            area=?, bedrooms=?, bathrooms=?, floor=?, year_built=?, furnished=?, features=?, lat=?, lng=?, status=?, updated_at=datetime('now')
-            WHERE id=?")
-        ->execute([$d['city_id'], $d['title'], $d['description'], $d['purpose'], $d['type'], $d['district'], $d['address'],
-            $d['price'], $d['rent_period'], $d['area'], $d['bedrooms'], $d['bathrooms'], $d['floor'], $d['year_built'],
-            $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status, $id]);
+    db()->prepare("UPDATE properties SET city_id=?, title=?, description=?, purpose=?, type=?, district=?, address=?, project=?, price=?, currency=?,
+            price_usd=?, rent_period=?, deed=?, area=?, bedrooms=?, bathrooms=?, floor=?, year_built=?, furnished=?, features=?, lat=?, lng=?, status=?,
+            updated_at=datetime('now') WHERE id=?")
+        ->execute([$d['city_id'], $d['title'], $d['description'], $d['purpose'], $d['type'], $d['district'], $d['address'], $d['project'],
+            $d['price'], $d['currency'], $d['price_usd'], $d['rent_period'], $d['deed'], $d['area'], $d['bedrooms'], $d['bathrooms'], $d['floor'],
+            $d['year_built'], $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status, $id]);
 
     foreach (attach_uploaded_images($id, normalize_files($_FILES['images'] ?? null)) as $msg) {
         flash('error', $msg);
@@ -238,7 +243,7 @@ function dash_profile_update(): void
     if (mb_strlen($name) < 2) {
         $errors['name'] = t('v_name');
     }
-    if ($phone !== '' && !preg_match('/^[0-9+\-\s()]{6,30}$/', $phone)) {
+    if ($phone !== '' && !valid_phone($phone)) {
         $errors['phone'] = t('v_phone');
     }
     if ($errors) {
