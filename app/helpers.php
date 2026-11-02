@@ -661,17 +661,49 @@ function run_maintenance(): void
     }
 }
 
-/** Only real-estate offices (نوسینگەکان) publish listings. Lives here so error pages can render the layout early. */
-function can_post_listings(?array $u): bool
+/**
+ * Office state for a user: 'none' (no office), 'pending' (never activated), 'expired', or 'active'.
+ * Only active offices publish listings; activation comes from the admin's code (sent after payment).
+ * Lives here so error pages can render the layout before controllers load.
+ */
+function office_state(?array $u): string
 {
     static $cache = [];
     if (!$u) {
-        return false;
+        return 'none';
     }
     if (!isset($cache[$u['id']])) {
-        $stmt = db()->prepare('SELECT 1 FROM offices WHERE user_id = ? LIMIT 1');
+        $stmt = db()->prepare("SELECT activated_at, active_until, active_until IS NOT NULL AND active_until <= datetime('now') AS lapsed FROM offices WHERE user_id = ?");
         $stmt->execute([(int) $u['id']]);
-        $cache[$u['id']] = (bool) $stmt->fetchColumn();
+        $o = $stmt->fetch();
+        $cache[$u['id']] = !$o ? 'none' : ($o['activated_at'] === null ? 'pending' : ($o['lapsed'] ? 'expired' : 'active'));
     }
     return $cache[$u['id']];
+}
+
+function can_post_listings(?array $u): bool
+{
+    return office_state($u) === 'active';
+}
+
+/** Activation codes: 8 characters from an alphabet without look-alikes (0/O, 1/I/L), shown as XXXX-XXXX. */
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function new_activation_code(): string
+{
+    $c = '';
+    for ($i = 0; $i < 8; $i++) {
+        $c .= CODE_ALPHABET[random_int(0, strlen(CODE_ALPHABET) - 1)];
+    }
+    return substr($c, 0, 4) . '-' . substr($c, 4);
+}
+
+function normalize_activation_code(string $raw): string
+{
+    return (string) preg_replace('/[^A-Z0-9]/', '', strtoupper(convert_arabic_digits($raw)));
+}
+
+function activation_code_hash(string $raw): string
+{
+    return hash('sha256', 'aqarat-activation:' . normalize_activation_code($raw));
 }

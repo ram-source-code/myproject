@@ -16,6 +16,35 @@
             <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-alert"></use></svg><p><?= e(t('open_office_desc')) ?></p></div>
         <?php endif; ?>
 
+        <?php if ($o):
+            ob_start(); ?>
+                <form method="post" action="<?= e(url('dashboard/office/activate')) ?>" class="activation-form" novalidate>
+                    <?= csrf_field() ?>
+                    <div class="field">
+                        <label for="code"><?= e(t('activation_code')) ?></label>
+                        <input id="code" name="code" required maxlength="20" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" dir="ltr" placeholder="XXXX-XXXX"<?= field_aria('code') ?>>
+                        <?= field_error('code') ?>
+                    </div>
+                    <button class="btn btn-primary" type="submit"><svg aria-hidden="true"><use href="#i-key"></use></svg><?= e(t('activate')) ?></button>
+                </form>
+            <?php $codeForm = (string) ob_get_clean(); ?>
+            <?php if ($state !== 'active'): ?>
+                <section class="panel stack" id="activate" aria-labelledby="act-h">
+                    <h2 id="act-h" class="panel-title"><?= e($state === 'expired' ? t('office_expired_title') : t('office_pending_title')) ?></h2>
+                    <p><?= e($state === 'expired' ? t('office_expired_desc', ['date' => substr((string) $o['active_until'], 0, 10)]) : t('office_pending_desc')) ?></p>
+                    <?php if ($adminWa): ?>
+                        <p><a class="btn btn-whatsapp" href="<?= e(whatsapp_url($adminWa, t('admin_wa_message', ['office' => $o['name'], 'id' => $o['id']]))) ?>" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('contact_admin_whatsapp')) ?></a></p>
+                    <?php endif; ?>
+                    <?= $codeForm ?>
+                </section>
+            <?php else: ?>
+                <details class="panel" id="activate"<?= field_error('code') !== '' ? ' open' : '' ?>>
+                    <summary><svg class="inline-icon" aria-hidden="true"><use href="#i-clock"></use></svg> <?= e($o['active_until'] ? t('office_active_until', ['date' => substr((string) $o['active_until'], 0, 10)]) : t('office_status_active')) ?> · <?= e(t('have_renewal_code')) ?></summary>
+                    <?= $codeForm ?>
+                </details>
+            <?php endif; ?>
+        <?php endif; ?>
+
         <form method="post" action="<?= e(url('dashboard/office')) ?>" enctype="multipart/form-data" class="panel stack" novalidate data-validate>
             <?= csrf_field() ?>
             <div class="logo-field">

@@ -93,7 +93,7 @@ $useMap = $useMap ?? false;
 <body class="<?= $user ? 'is-auth' : 'is-guest' ?>">
 <?= render_partial('partials/icons') ?>
 <script type="application/json" id="i18n"><?= json_encode([
-    'show' => t('show'), 'hide' => t('hide'), 'link_copied' => t('link_copied'),
+    'show' => t('show'), 'hide' => t('hide'), 'link_copied' => t('link_copied'), 'copied' => t('copied'),
     'files_selected' => t('files_selected'), 'file_too_big' => t('file_too_big'), 'too_many_files' => t('too_many_files'),
     'v_password_match' => t('v_password_match'),
     'follow' => t('follow'), 'following' => t('following'), 'push_denied' => t('push_denied'),
@@ -154,9 +154,9 @@ $useMap = $useMap ?? false;
                     </summary>
                     <ul class="menu-list">
                         <?php if ($canPost || $user['role'] === 'admin'): ?><li><a href="<?= e(url('dashboard')) ?>"><?= e(t('my_listings')) ?></a></li><?php endif; ?>
-                        <?php if ($canPost): ?>
+                        <?php if (office_state($user) !== 'none'): ?>
                             <li><a href="<?= e(url('dashboard/office')) ?>"><?= e(t('my_office')) ?></a></li>
-                            <li><a href="<?= e(url('dashboard/notifications')) ?>"><?= e(t('send_notification')) ?></a></li>
+                            <?php if ($canPost): ?><li><a href="<?= e(url('dashboard/notifications')) ?>"><?= e(t('send_notification')) ?></a></li><?php endif; ?>
                         <?php else: ?>
                             <li><a href="<?= e(url('dashboard/office')) ?>"><?= e(t('open_office')) ?></a></li>
                         <?php endif; ?>

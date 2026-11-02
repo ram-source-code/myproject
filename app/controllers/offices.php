@@ -43,7 +43,7 @@ function offices_index(): void
 {
     $q = mb_substr(trim((string) ($_GET['q'] ?? '')), 0, 80);
     $city = input_int('city', null, $_GET);
-    $where = ['1=1'];
+    $where = ['o.activated_at IS NOT NULL'];
     $args = [];
     if ($q !== '') {
         $where[] = "o.name LIKE ? ESCAPE '\\'";
@@ -66,8 +66,8 @@ function offices_index(): void
 function office_show(int $id): void
 {
     $o = find_office($id);
-    if (!$o) {
-        abort(404);
+    if (!$o || ($o['activated_at'] === null && !is_admin() && (int) ($o['user_id']) !== (int) (current_user()['id'] ?? 0))) {
+        abort(404);                       // not public until the admin activates it
     }
     $f = search_filters($_GET);
     $f['office'] = $id;
@@ -89,8 +89,9 @@ function office_show(int $id): void
 function require_poster(): array
 {
     $u = require_login();
-    if (!can_post_listings($u)) {
-        flash('info', t('only_offices_post'));
+    $state = office_state($u);
+    if ($state !== 'active') {
+        flash('info', t($state === 'none' ? 'only_offices_post' : ($state === 'expired' ? 'office_expired_short' : 'office_pending_short')));
         redirect(url('dashboard/office'));
     }
     return $u;
@@ -103,6 +104,10 @@ function require_office_user(): array
         flash('info', t('office_only'));
         redirect(url('dashboard'));
     }
+    if ($u['role'] !== 'admin' && !can_post_listings($u)) {     // notifying followers is part of the paid plan too
+        flash('info', t(office_state($u) === 'expired' ? 'office_expired_short' : 'office_pending_short'));
+        redirect(url('dashboard/office'));
+    }
     return $u;
 }
 
@@ -114,6 +119,8 @@ function dash_office(): void
         'pageTitle' => t('my_office') . ' — ' . app_name(),
         'o'         => $o,
         'u'         => $u,
+        'state'     => office_state($u),
+        'adminWa'   => admin_whatsapp(),
         'active'    => 'office',
     ]);
 }
@@ -153,6 +160,9 @@ function dash_office_save(): void
         if ($u['role'] === 'user') {      // an individual opening an office becomes an office account
             db()->prepare("UPDATE users SET role = 'agent' WHERE id = ?")->execute([$u['id']]);
         }
+        if ($u['role'] === 'admin') {     // the admin's own office needs no code
+            db()->prepare("UPDATE offices SET activated_at = datetime('now') WHERE id = ?")->execute([$o['id']]);
+        }
     }
     db()->prepare('UPDATE offices SET name=?, about=?, phone=?, whatsapp=?, address=?, city_id=? WHERE id=?')
         ->execute([$d['name'], $d['about'], $d['phone'], $d['whatsapp'], $d['address'], $d['city_id'], $o['id']]);
@@ -170,6 +180,50 @@ function dash_office_save(): void
         }
     }
     flash('success', t('office_saved'));
+    redirect(url('dashboard/office'));
+}
+
+/** The admin's WhatsApp number for "send me my code" (config admin_whatsapp, else the first admin's phone). */
+function admin_whatsapp(): string
+{
+    $n = (string) config('admin_whatsapp', '');
+    if ($n === '') {
+        $n = (string) db()->query("SELECT phone FROM users WHERE role = 'admin' AND status = 'active' AND phone != '' ORDER BY id LIMIT 1")->fetchColumn();
+    }
+    return valid_phone($n) ? $n : '';
+}
+
+/** Office enters the code the admin sent on WhatsApp. Codes are one-time, bound to this office, and expire. */
+function dash_office_activate(): void
+{
+    $u = require_login();
+    $o = office_for_user((int) $u['id']);
+    if (!$o) {
+        redirect(url('dashboard/office'));
+    }
+    rate_limit('activate', 10, 3600);
+    $hash = activation_code_hash((string) ($_POST['code'] ?? ''));
+    $pdo = db();
+    $pdo->exec('BEGIN IMMEDIATE');
+    $stmt = $pdo->prepare("SELECT id, months FROM activation_codes WHERE code_hash = ? AND office_id = ? AND used_at IS NULL AND expires_at > datetime('now')");
+    $stmt->execute([$hash, $o['id']]);
+    $code = $stmt->fetch();
+    if (!$code) {
+        $pdo->exec('ROLLBACK');
+        with_old([], ['code' => t('activation_bad')]);
+        redirect(url('dashboard/office') . '#activate');
+    }
+    $pdo->prepare("UPDATE activation_codes SET used_at = datetime('now') WHERE id = ?")->execute([$code['id']]);
+    if ($code['months'] === null) {
+        $pdo->prepare("UPDATE offices SET activated_at = datetime('now'), active_until = NULL WHERE id = ?")->execute([$o['id']]);
+    } else {
+        // Renewing early extends from the current end date, so paid time is never lost.
+        $pdo->prepare("UPDATE offices SET activated_at = datetime('now'),
+            active_until = datetime(CASE WHEN active_until > datetime('now') THEN active_until ELSE datetime('now') END, '+' || ? || ' months') WHERE id = ?")
+            ->execute([(int) $code['months'], $o['id']]);
+    }
+    $pdo->exec('COMMIT');
+    flash('success', t('activation_ok'));
     redirect(url('dashboard/office'));
 }
 

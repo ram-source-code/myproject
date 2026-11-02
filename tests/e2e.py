@@ -31,6 +31,16 @@ def login(s, email, pw):
 def img(fmt, size=(1200, 800), mode='RGB'):
     b = io.BytesIO(); Image.new(mode, size, (200, 100, 50, 128) if mode == 'RGBA' else (200, 100, 50)).save(b, fmt); return b.getvalue()
 
+import html as _html
+def admin_code(adm, office_id, months='1'):
+    page = adm.get(B + '/admin/offices').text
+    r = adm.post(B + f'/admin/offices/{office_id}/code', data={'_csrf': tok(page), 'months': months})
+    m = re.search(r'class="activation-code" dir="ltr">([A-Z0-9-]+)<', r.text)
+    return (m.group(1) if m else None), r.text
+def enter_code(s, code):
+    page = s.get(B + '/dashboard/office').text
+    return s.post(B + '/dashboard/office/activate', data={'_csrf': tok(page), 'code': code})
+
 # ── Base path & PWA
 anon = sess()
 r = anon.get(B + '/')
@@ -80,6 +90,22 @@ r = o.post(B + '/dashboard/office', data={'_csrf': t, 'name': 'Test Realty', 'ab
            files={'logo': ('logo.png', img('PNG', (300, 300)), 'image/png')})
 ok('/uploads/' in r.text and '.webp' in r.text, 'office logo uploaded as WebP')
 office_id = re.search(r'/office/(\d+)"', r.text).group(1)
+
+# ── Activation: an office can't post until it enters the admin's code (sent after payment)
+r = o.get(B + '/dashboard/properties/new')
+ok(r.url.endswith('/dashboard/office') and 'Waiting for activation' in r.text and 'name="code"' in r.text, 'new office is pending: no posting, code box shown')
+ok(anon.get(B + '/office/' + office_id).status_code == 404 and 'Test Realty' not in anon.get(B + '/offices').text, 'pending office hidden from the public')
+adm = sess(); login(adm, 'admin@aqarat.local', ADMIN_PW)
+code, page = admin_code(adm, office_id, '3')
+ok(bool(code and re.fullmatch(r'[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}', code)) and code in _html.unescape(page.split('wa.me/9647501234567?text=', 1)[-1].split('"', 1)[0]),
+   'admin generates code + WhatsApp link to the office')
+ok(code not in adm.get(B + '/admin/offices').text, 'code is shown once only')
+r = enter_code(o, 'ABCD-EFGH')
+ok('wrong, already used, or expired' in r.text and not o.get(B + '/dashboard/properties/new').url.endswith('/properties/new'), 'wrong code refused')
+r = enter_code(o, code.lower().replace('-', ' '))
+ok('Your office is active' in r.text and 'Active until' in r.text, 'right code activates for the chosen months (input normalised)')
+ok('wrong, already used, or expired' in enter_code(o, code).text, 'code cannot be reused')
+ok(anon.get(B + '/office/' + office_id).status_code == 200, 'active office is public')
 
 t = tok(o.get(B + '/dashboard/properties/new').text)
 files = [('images[]', ('a.jpg', img('JPEG'), 'image/jpeg')), ('images[]', ('evil.jpg', b'<?php system($_GET["c"]); ?>', 'image/jpeg'))]
@@ -160,7 +186,10 @@ ok(other.post(B + '/dashboard/notifications', data={'_csrf': meta_tok(r.text), '
 # An individual can open an office; then the IDOR check still applies to someone else's listing.
 r = other.get(B + '/dashboard/office')
 r = other.post(B + '/dashboard/office', data={'_csrf': tok(r.text), 'name': 'Other Realty', 'about': '', 'phone': '', 'whatsapp': '', 'address': '', 'city_id': '1'})
-ok('Other Realty' in r.text and other.get(B + '/dashboard/properties/new').url.endswith('/dashboard/properties/new'), 'individual opened an office and may now post')
+other_office = re.search(r'/office/(\d+)"', r.text).group(1)
+ok('Other Realty' in r.text and other.get(B + '/dashboard/properties/new').url.endswith('/dashboard/office'), 'individual opened an office: pending until activated')
+c2, _ = admin_code(adm, other_office, '0')
+ok(c2 and enter_code(other, c2).url.endswith('/dashboard/office') and other.get(B + '/dashboard/properties/new').url.endswith('/dashboard/properties/new'), 'after the code (no end date) they may post')
 ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
 
 # ── Admin approves → auto notification once

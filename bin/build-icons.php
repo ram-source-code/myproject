@@ -22,7 +22,7 @@ $MAP = [
     'expand' => ['lucide', 'expand'], 'bell' => ['lucide', 'bell'], 'globe' => ['lucide', 'globe'], 'building' => ['lucide', 'building-2'],
     'verified' => ['lucide', 'badge-check'], 'map' => ['lucide', 'map'], 'grid' => ['lucide', 'layout-grid'], 'download' => ['lucide', 'download'],
     'send' => ['lucide', 'send'], 'clock' => ['lucide', 'clock'], 'doc' => ['lucide', 'file-text'], 'flag' => ['lucide', 'flag'],
-    'video' => ['lucide', 'video'], 'copy' => ['lucide', 'copy'], 'share' => ['lucide', 'share-2'], 'camera' => ['lucide', 'camera'],
+    'video' => ['lucide', 'video'], 'copy' => ['lucide', 'copy'], 'key' => ['lucide', 'key-round'], 'share' => ['lucide', 'share-2'], 'camera' => ['lucide', 'camera'],
     'locate' => ['lucide', 'locate-fixed'], 'sparkles' => ['lucide', 'sparkles'], 'arrow' => ['lucide', 'arrow-up-right'],
     'minus' => ['lucide', 'minus'], 'wifi-off' => ['lucide', 'wifi-off'], 'settings' => ['lucide', 'settings'],
     'ios-share' => ['lucide', 'share'], 'square-plus' => ['lucide', 'square-plus'], 'smartphone' => ['lucide', 'smartphone'],

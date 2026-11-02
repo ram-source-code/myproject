@@ -7,8 +7,8 @@ function dashboard_home(): void
     if ($u['role'] !== 'admin' && !can_post_listings($u)) {
         $has = db()->prepare('SELECT 1 FROM properties WHERE user_id = ? LIMIT 1');
         $has->execute([$u['id']]);
-        if (!$has->fetchColumn()) {          // customers: their home is saved listings, not an empty "my listings"
-            redirect(url('dashboard/favorites'));
+        if (!$has->fetchColumn()) {          // customers: saved listings; offices awaiting activation: their office page
+            redirect(url(office_state($u) === 'none' ? 'dashboard/favorites' : 'dashboard/office'));
         }
     }
     $where = $u['role'] === 'admin' ? '1=1' : 'p.user_id = ?';

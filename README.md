@@ -4,8 +4,21 @@ A property marketplace for **Kurdistan** in plain **PHP 8.1+, HTML, CSS and vani
 **SQLite (WAL mode)**, a **GD pipeline that converts every upload to WebP**, an **installable PWA**,
 and **Web Push notifications** from real-estate offices (نوسینگە) to the people who follow them.
 
-**Only real-estate offices post listings.** Everyone else browses, saves, follows offices and contacts them; any account
-can become an office from *Dashboard → Open an office*.
+**Only real-estate offices post listings, and only after the admin activates them.** Everyone else browses, saves,
+follows offices and contacts them.
+
+**Office activation (paid plans):**
+1. An office registers (or any account picks *Dashboard → Open an office*). It is *waiting for activation*: it can't post,
+   and it isn't shown publicly. Its page has a WhatsApp button to message the admin.
+2. After the office pays, the admin opens **Admin → Offices**, picks the length (1/3/6/12 months or no end date)
+   and taps **Generate code**. The code (e.g. `K7QM-3XPA`) is shown once, with **Send on WhatsApp** (a ready message to the
+   office's number) and **Copy** buttons.
+3. The office enters the code under *My office*. Codes work once, only for that office, and stop working after 14 days.
+   A renewal code adds the months to the current end date, so paying early loses nothing.
+4. When a plan ends the office can't post or send notifications until it enters a new code; its existing listings stay up.
+   **Deactivate** stops an office immediately.
+
+The admin's WhatsApp number comes from the admin's phone in *Profile* (or set `admin_whatsapp` in `data/config.local.php`).
 No frameworks, no Composer, no build step.
 
 Languages: **کوردی (Sorani, default)**, العربية and English — RTL/LTR handled automatically.

@@ -14,9 +14,9 @@ $canPost = can_post_listings(current_user());
             <li><a href="<?= e(url('dashboard/inquiries')) ?>"<?= $a('inquiries') ?>><?= e(t('inquiries')) ?></a></li>
         <?php endif; ?>
         <li><a href="<?= e(url('dashboard/favorites')) ?>"<?= $a('favorites') ?>><?= e(t('favorites')) ?></a></li>
-        <?php if ($canPost): ?>
+        <?php if (office_state(current_user()) !== 'none'): ?>
             <li><a href="<?= e(url('dashboard/office')) ?>"<?= $a('office') ?>><?= e(t('my_office')) ?></a></li>
-            <li><a href="<?= e(url('dashboard/notifications')) ?>"<?= $a('notifications') ?>><?= e(t('send_notification')) ?></a></li>
+            <?php if ($canPost): ?><li><a href="<?= e(url('dashboard/notifications')) ?>"<?= $a('notifications') ?>><?= e(t('send_notification')) ?></a></li><?php endif; ?>
         <?php else: ?>
             <li><a href="<?= e(url('dashboard/office')) ?>"<?= $a('office') ?>><?= e(t('open_office')) ?></a></li>
         <?php endif; ?>

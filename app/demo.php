@@ -132,6 +132,7 @@ function seed_demo_data(int $adminId): void
             @unlink(substr($tmp, 0, -4));
             $pdo->prepare('INSERT INTO offices (user_id, name, slug, logo, about, phone, whatsapp, address, city_id, is_verified) VALUES (?,?,?,?,?,?,?,?,?,?)')
                 ->execute([$uid, $name, 'office-' . ($i + 1), $logo, $about, $ph, $ph, $addr, $cityId($cityEn), $verified]);
+            $pdo->prepare("UPDATE offices SET activated_at = datetime('now') WHERE user_id = ?")->execute([$uid]);   // demo offices are paid up
         }
         $officeUsers[$cityEn][] = $uid;
     }

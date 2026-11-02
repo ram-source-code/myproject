@@ -382,5 +382,22 @@ function migrations(): array
         );
         CREATE INDEX idx_admin_log ON admin_log(created_at);
         SQL,
+        // v6 — offices need the admin's activation code (sent after payment) before they can post
+        <<<'SQL'
+        ALTER TABLE offices ADD COLUMN activated_at TEXT;
+        ALTER TABLE offices ADD COLUMN active_until TEXT;
+        UPDATE offices SET activated_at = datetime('now');
+        CREATE TABLE activation_codes (
+            id         INTEGER PRIMARY KEY,
+            office_id  INTEGER NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+            code_hash  TEXT    NOT NULL UNIQUE,
+            months     INTEGER,
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT    NOT NULL,
+            used_at    TEXT
+        );
+        CREATE INDEX idx_activation_office ON activation_codes(office_id);
+        SQL,
     ];
 }
