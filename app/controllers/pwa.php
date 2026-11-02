@@ -12,6 +12,7 @@ function json_body(): array
 
 function push_follow(): void
 {
+    rate_limit('push', 120, 600);
     $in = json_body();
     $officeId = (int) ($in['office_id'] ?? 0);
     if (!$officeId || !find_office($officeId)) {
@@ -56,6 +57,7 @@ function push_news(): void
 /** Save the current search as an alert for this device. */
 function push_search_save(): void
 {
+    rate_limit('push', 120, 600);
     $in = json_body();
     $f = compact_filters(search_filters(is_array($in['query'] ?? null) ? $in['query'] : []));
     try {
@@ -202,6 +204,7 @@ function api_map(): void
         'area'  => (float) $p['area'],
         'type'  => t('type_' . $p['type']),
         'url'   => property_url($p),
+        'dist'  => isset($p['distance_km']) ? format_distance((float) $p['distance_km']) : null,
         'thumb' => $p['cover_thumb'] ? upload_url($p['cover_thumb']) : null,
     ], $rows)]);
 }

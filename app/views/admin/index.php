@@ -57,5 +57,26 @@
                 <p class="muted small"><?= e(t('db_mode')) ?>: <code><?= e($journal) ?></code> · <?= e(t('photos')) ?>: <?= (int) $stats['images'] ?></p>
             </section>
         </div>
+        <div class="grid-2 align-start">
+            <section class="panel" aria-labelledby="bk-h">
+                <h2 id="bk-h" class="panel-title"><?= e(t('backup')) ?></h2>
+                <p class="muted"><?= e(t('backup_desc')) ?></p>
+                <form method="post" action="<?= e(url('admin/backup')) ?>">
+                    <?= csrf_field() ?>
+                    <button class="btn btn-primary" type="submit"><svg aria-hidden="true"><use href="#i-download"></use></svg><?= e(t('download_backup')) ?></button>
+                </form>
+            </section>
+            <section class="panel" aria-labelledby="log-h">
+                <h2 id="log-h" class="panel-title"><?= e(t('audit_log')) ?></h2>
+                <?php if ($log): ?>
+                    <ul class="notif-list audit-list">
+                        <?php foreach ($log as $l): ?>
+                            <li><code><?= e($l['action']) ?></code> <?= e($l['target']) ?>
+                                <p class="muted small"><?= e($l['name'] ?? '—') ?> · <time datetime="<?= e($l['created_at']) ?>"><?= e($l['created_at']) ?></time></p></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php else: ?><p class="muted"><?= e(t('nothing_logged')) ?></p><?php endif; ?>
+            </section>
+        </div>
     </div>
 </div>

@@ -25,6 +25,7 @@ $headingTag = $headingTag ?? 'h3';
         <p class="card-location">
             <svg aria-hidden="true"><use href="#i-pin"></use></svg>
             <?= e(implode('، ', array_filter([$p['district'], city_name($p)]))) ?>
+            <?php if (isset($p['distance_km'])): ?><span class="card-distance"><svg aria-hidden="true"><use href="#i-locate"></use></svg><?= e(format_distance((float) $p['distance_km'])) ?></span><?php endif; ?>
         </p>
         <?php if (!empty($p['project'])): ?><p class="card-project"><?= e($p['project']) ?></p><?php endif; ?>
         <ul class="specs" aria-label="<?= e(t('specs')) ?>">

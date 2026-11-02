@@ -50,5 +50,23 @@
                 <div><button class="btn btn-primary" type="submit"><?= e(t('update_password')) ?></button></div>
             </form>
         </section>
+        <section class="panel" aria-labelledby="data-h" id="delete">
+            <h2 id="data-h" class="panel-title"><?= e(t('your_data')) ?></h2>
+            <p class="muted"><?= e(t('your_data_desc')) ?> <a href="<?= e(url('privacy')) ?>"><?= e(t('privacy_policy')) ?></a></p>
+            <p><a class="btn btn-outline" href="<?= e(url('dashboard/export')) ?>" download><svg aria-hidden="true"><use href="#i-download"></use></svg><?= e(t('export_data')) ?></a></p>
+            <details class="danger-details">
+                <summary class="btn btn-ghost text-danger"><svg aria-hidden="true"><use href="#i-trash"></use></svg><?= e(t('delete_account')) ?></summary>
+                <form method="post" action="<?= e(url('dashboard/delete-account')) ?>" class="stack" data-confirm="<?= e(t('delete_account_confirm')) ?>">
+                    <?= csrf_field() ?>
+                    <p class="muted"><?= e(t('delete_account_desc')) ?></p>
+                    <div class="field">
+                        <label for="delete_password"><?= e(t('current_password')) ?></label>
+                        <input id="delete_password" name="password" type="password" required autocomplete="current-password" dir="ltr"<?= field_aria('delete_password') ?>>
+                        <?= field_error('delete_password') ?>
+                    </div>
+                    <div><button class="btn btn-danger" type="submit"><?= e(t('delete_account')) ?></button></div>
+                </form>
+            </details>
+        </section>
     </div>
 </div>

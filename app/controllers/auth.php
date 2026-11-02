@@ -19,7 +19,7 @@ function login_throttled(string $email): bool
     $stmt->execute([client_ip(), $since, $email, $since]);
     [$byIp, $byEmail] = $stmt->fetch(PDO::FETCH_NUM);
     $max = (int) config('login_max_attempts');
-    return $byIp >= $max * 4 || $byEmail >= $max;
+    return $byIp >= $max * 20 || $byEmail >= $max;   // per account strict; per IP generous (CGNAT)
 }
 
 function login_submit(): void
@@ -37,7 +37,7 @@ function login_submit(): void
     $u = $stmt->fetch();
 
     // Always run password_verify to keep timing similar for unknown emails.
-    $hash = $u['password_hash'] ?? password_hash(bin2hex(random_bytes(8)), PASSWORD_DEFAULT);
+    $hash = $u['password_hash'] ?? password_hash(bin2hex(random_bytes(8)), PASSWORD_ALGO);
     $ok = password_verify($password, $hash) && $u;
 
     if (!$ok) {
@@ -49,8 +49,8 @@ function login_submit(): void
         with_old(['email' => $email], ['email' => t('account_banned')]);
         redirect(url('login'));
     }
-    if (password_needs_rehash($u['password_hash'], PASSWORD_DEFAULT)) {
-        db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $u['id']]);
+    if (password_needs_rehash($u['password_hash'], PASSWORD_ALGO)) {
+        db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($password, PASSWORD_ALGO), $u['id']]);
     }
     db()->prepare('DELETE FROM login_attempts WHERE email = ?')->execute([$email]);
 
@@ -80,6 +80,7 @@ function register_submit(): void
     ];
     $password = (string) ($_POST['password'] ?? '');
     $confirm  = (string) ($_POST['password_confirm'] ?? '');
+    rate_limit('register', 20, 3600);
 
     $errors = [];
     if (mb_strlen($data['name']) < 2) {
@@ -90,6 +91,9 @@ function register_submit(): void
     }
     if ($data['phone'] !== '' && !valid_phone($data['phone'])) {
         $errors['phone'] = t('v_phone');
+    }
+    if (!form_time_ok(3)) {
+        $errors['name'] = t('form_too_fast');
     }
     if ($data['role'] === 'agent' && mb_strlen($data['office_name']) < 2) {
         $errors['office_name'] = t('v_office_name');
@@ -112,7 +116,7 @@ function register_submit(): void
     }
 
     db()->prepare('INSERT INTO users (name, email, phone, password_hash, role) VALUES (?,?,?,?,?)')
-        ->execute([$data['name'], $data['email'], $data['phone'], password_hash($password, PASSWORD_DEFAULT), $data['role']]);
+        ->execute([$data['name'], $data['email'], $data['phone'], password_hash($password, PASSWORD_ALGO), $data['role']]);
     $userId = (int) db()->lastInsertId();
     if ($data['role'] === 'agent') {
         create_office($userId, $data['office_name'], $data['phone']);

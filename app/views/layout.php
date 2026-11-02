@@ -61,7 +61,9 @@ $useMap = $useMap ?? false;
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="<?= e(app_name()) ?>">
-    <link rel="preload" href="<?= e(asset('fonts/' . (lang() === 'en' ? 'inter-latin-wght.woff2' : 'noto-sans-arabic-wght.woff2'))) ?>" as="font" type="font/woff2" crossorigin>
+    <?php /* Preload EXACTLY the URL that @font-face in app.css requests (no ?v= query) — otherwise the browser treats
+             them as two files: the preload goes unused (console warning) and the font downloads twice. */ ?>
+    <link rel="preload" href="<?= e(url('assets/fonts/' . (lang() === 'en' ? 'inter-latin-wght.woff2' : 'noto-sans-arabic-wght.woff2'))) ?>" as="font" type="font/woff2" crossorigin>
     <?php $useMap = $useMap && maps_enabled(); ?>
     <?php if ($useMap): ?>
         <link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>">
@@ -100,6 +102,9 @@ $useMap = $useMap ?? false;
     'no_follows' => t('no_follows'), 'no_feed' => t('no_feed'), 'unfollow' => t('unfollow'),
     'view' => t('view'), 'beds_short' => t('beds_short'), 'sqm' => t('sqm'), 'map_empty' => t('map_empty'),
     'alert_on' => t('alert_on'), 'delete' => t('delete'), 'no_searches' => t('no_searches'),
+    'loc_insecure' => t('loc_insecure'), 'loc_unavailable' => t('loc_unavailable'), 'loc_denied' => t('loc_denied'),
+    'loc_timeout' => t('loc_timeout'), 'loc_set' => t('loc_set'), 'near_none' => t('near_none'), 'pick_city' => t('pick_city'),
+    'locate_me' => t('locate_me'), 'search_this_area' => t('search_this_area'),
     'recently_viewed' => t('recently_viewed'), 'clear' => t('reset'), 'offline_now' => t('offline_now'), 'online_now' => t('online_now'),
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <a class="skip-link" href="#main"><?= e(t('skip_to_content')) ?></a>
@@ -224,7 +229,9 @@ $useMap = $useMap ?? false;
         </div>
     </div>
     <div class="container footer-bottom">
-        <small>© <?= date('Y') ?> <?= e(app_name()) ?>. <?= e(t('rights')) ?></small>
+        <small>© <?= date('Y') ?> <?= e(app_name()) ?>. <?= e(t('rights')) ?>
+            · <a href="<?= e(url('privacy')) ?>"><?= e(t('privacy_policy')) ?></a>
+            · <a href="<?= e(url('terms')) ?>"><?= e(t('terms')) ?></a></small>
         <ul class="footer-langs">
             <?php foreach (LANG_NAMES as $code => $name): ?>
                 <li><a href="<?= e(url('lang/' . $code)) ?>" lang="<?= e($code) ?>"><?= e($name) ?></a></li>

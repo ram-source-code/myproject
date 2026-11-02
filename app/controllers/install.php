@@ -147,7 +147,7 @@ function install_submit(): void
     seed_cities();
     $pdo->prepare("INSERT INTO users (name, email, phone, password_hash, role) VALUES (?,?,?,?, 'admin')
         ON CONFLICT(email) DO UPDATE SET role = 'admin', password_hash = excluded.password_hash")
-        ->execute([$name, $email, $phone, password_hash($password, PASSWORD_DEFAULT)]);
+        ->execute([$name, $email, $phone, password_hash($password, PASSWORD_ALGO)]);
     $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
     $stmt->execute([$email]);
     $id = (int) $stmt->fetchColumn();

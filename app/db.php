@@ -24,18 +24,34 @@ function db(): PDO
         PDO::ATTR_TIMEOUT            => 5,
     ]);
 
-    // WAL: concurrent readers with a single writer, far fewer "database is locked" errors.
-    $mode = $pdo->query('PRAGMA journal_mode = WAL')->fetchColumn();
-    if (strtolower((string) $mode) !== 'wal') {
-        error_log('aqarat: could not enable WAL mode, got ' . $mode);
-    }
-    $pdo->exec('PRAGMA synchronous = NORMAL');   // safe with WAL, much faster
-    $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->exec('PRAGMA busy_timeout = 5000');
+    $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->exec('PRAGMA temp_store = MEMORY');
     $pdo->exec('PRAGMA cache_size = -16000');    // ~16 MB
 
-    migrate($pdo);
+    // WAL (concurrent readers + one writer) is persistent once set, so it is decided ONCE on a fresh database.
+    // Some filesystems (network drives) report success and then fail on the first write: the first migration
+    // is that write test, and on failure the database falls back to the classic rollback journal.
+    if ((int) $pdo->query('PRAGMA user_version')->fetchColumn() === 0) {
+        $mode = strtolower((string) $pdo->query('PRAGMA journal_mode = WAL')->fetchColumn());
+        try {
+            migrate($pdo);
+        } catch (PDOException $e) {
+            if ($mode !== 'wal') {
+                throw $e;
+            }
+            error_log('aqarat: WAL writes failed (' . $e->getMessage() . '), falling back to journal_mode=DELETE');
+            $pdo->exec('PRAGMA journal_mode = DELETE');
+            migrate($pdo);
+        }
+    } else {
+        migrate($pdo);
+    }
+    $wal = strtolower((string) $pdo->query('PRAGMA journal_mode')->fetchColumn()) === 'wal';
+    $pdo->exec('PRAGMA synchronous = ' . ($wal ? 'NORMAL' : 'FULL'));   // NORMAL is crash-safe only with WAL
+    if (function_exists('register_geo_functions')) {
+        register_geo_functions($pdo);
+    }
     return $pdo;
 }
 
@@ -347,6 +363,24 @@ function migrations(): array
         // v4 — dominant colour per photo (instant placeholders while images load)
         <<<SQL
         ALTER TABLE property_images ADD COLUMN color TEXT;
+        SQL,
+
+        // v5 — generic rate limiting + admin audit log
+        <<<SQL
+        CREATE TABLE hits (
+            k TEXT    NOT NULL,          -- endpoint:ip
+            t INTEGER NOT NULL
+        );
+        CREATE INDEX idx_hits ON hits(k, t);
+        CREATE TABLE admin_log (
+            id         INTEGER PRIMARY KEY,
+            user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            action     TEXT    NOT NULL,
+            target     TEXT    NOT NULL DEFAULT '',
+            ip         TEXT    NOT NULL DEFAULT '',
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_admin_log ON admin_log(created_at);
         SQL,
     ];
 }

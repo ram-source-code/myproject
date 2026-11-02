@@ -120,7 +120,7 @@ function seed_demo_data(int $adminId): void
         $uid = (int) $stmt->fetchColumn();
         if (!$uid) {
             $pdo->prepare("INSERT INTO users (name, email, phone, password_hash, role) VALUES (?,?,?,?, 'agent')")
-                ->execute([$name, $em, $ph, password_hash('demo-password', PASSWORD_DEFAULT)]);
+                ->execute([$name, $em, $ph, password_hash('demo-password', PASSWORD_ALGO)]);
             $uid = (int) $pdo->lastInsertId();
         }
         $exists = $pdo->prepare('SELECT id FROM offices WHERE user_id = ?');

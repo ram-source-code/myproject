@@ -35,6 +35,16 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
 </div>
 
 <nav class="container quick-chips scroll-x" aria-label="<?= e(t('quick_filters')) ?>">
+    <?php if ($f['near'] !== ''): ?>
+        <a class="qchip qchip-near" aria-current="true" href="<?= e(url('properties', array_diff_key($query, ['near' => 1, 'r' => 1, 'sort' => 1]) + ($viewMode === 'map' ? ['view' => 'map'] : []))) ?>">
+            <svg aria-hidden="true"><use href="#i-locate"></use></svg><?= e(t('near_me_r', ['r' => (int) $f['r']])) ?>
+            <svg class="qchip-x" aria-hidden="true"><use href="#i-x"></use></svg><span class="visually-hidden"><?= e(t('remove_location')) ?></span>
+        </a>
+    <?php else: ?>
+        <button type="button" class="qchip qchip-near" data-near-me data-target="<?= e(url('properties', $query + ($viewMode === 'map' ? ['view' => 'map'] : []))) ?>">
+            <svg aria-hidden="true"><use href="#i-locate"></use></svg><?= e(t('near_me')) ?>
+        </button>
+    <?php endif; ?>
     <button type="button" class="qchip qchip-filter" data-open-filters aria-controls="filter-sheet">
         <svg aria-hidden="true"><use href="#i-filter"></use></svg><?= e(t('filters')) ?><?php if ($activeCount): ?> <span class="badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
@@ -57,6 +67,17 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
         </summary>
         <form method="get" action="<?= e(url('properties')) ?>" class="filters-form" role="search" aria-label="<?= e(t('filters')) ?>">
             <?php if ($viewMode === 'map'): ?><input type="hidden" name="view" value="map"><?php endif; ?>
+            <?php if ($f['near'] !== ''): ?>
+                <input type="hidden" name="near" value="<?= e($f['near']) ?>">
+                <div class="field">
+                    <label for="f-r"><svg class="inline-icon" aria-hidden="true"><use href="#i-locate"></use></svg> <?= e(t('distance_from_you')) ?></label>
+                    <select id="f-r" name="r">
+                        <?php foreach (NEAR_RADII as $rad): ?>
+                            <option value="<?= $rad ?>" <?= (int) $f['r'] === $rad ? 'selected' : '' ?>><?= e(t('within_km', ['r' => $rad])) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            <?php endif; ?>
             <div class="field">
                 <label for="f-q"><?= e(t('keyword')) ?></label>
                 <input id="f-q" type="search" name="q" value="<?= e($f['q']) ?>" placeholder="<?= e(t('keyword_ph')) ?>" maxlength="100">
@@ -159,13 +180,15 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
             <div class="map-wrap">
                 <div id="results-map" class="results-map" data-map-results
                      data-endpoint="<?= e(url('api/map', $query)) ?>"
+                     data-near="<?= e($f['near']) ?>" data-radius="<?= (int) ($f['r'] ?? 0) ?>"
+                     data-search-area="<?= e(url('properties', array_diff_key($query, ['near' => 1, 'r' => 1, 'sort' => 1]) + ['view' => 'map'])) ?>"
                      data-center="<?= e(implode(',', config('map_center'))) ?>"
                      role="region" aria-label="<?= e(t('map')) ?>"></div>
                 <noscript><p class="muted"><?= e(t('map_needs_js')) ?></p></noscript>
             </div>
         <?php else: ?>
             <div class="results-bar">
-            <button type="button" class="btn btn-outline btn-sm" data-save-search="<?= e(json_encode(compact_filters($f), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>">
+            <button type="button" class="btn btn-outline btn-sm" <?= $f['near'] !== '' ? 'data-location-note="' . e(t('alert_location_note')) . '"' : '' ?> data-save-search="<?= e(json_encode(compact_filters($f), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>">
                 <svg aria-hidden="true"><use href="#i-bell"></use></svg><span><?= e(t('alert_me')) ?></span>
             </button>
             <form method="get" action="<?= e(url('properties')) ?>" class="sort-bar" data-autosubmit>
@@ -174,7 +197,7 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                 <?php endforeach; ?>
                 <label for="sort"><?= e(t('sort_by')) ?></label>
                 <select id="sort" name="sort">
-                    <?php foreach (['newest', 'price_asc', 'price_desc', 'area_desc', 'popular'] as $s): ?>
+                    <?php foreach (array_merge($f['near'] !== '' ? ['nearest'] : [], ['newest', 'price_asc', 'price_desc', 'area_desc', 'popular']) as $s): ?>
                         <option value="<?= $s ?>" <?= $f['sort'] === $s ? 'selected' : '' ?>><?= e(t('sort_' . $s)) ?></option>
                     <?php endforeach; ?>
                 </select>

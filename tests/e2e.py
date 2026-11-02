@@ -20,6 +20,9 @@ def sess():
     return s
 
 def tok(html): return re.search(r'name="_csrf" value="([^"]+)"', html).group(1)
+def ft(html): return re.search(r'name="_ft" value="([^"]+)"', html).group(1)   # signed form-render time
+import time
+def human(sec=3.2): time.sleep(sec)                                             # public forms reject instant (bot) submits
 def meta_tok(html): return re.search(r'name="csrf-token" content="([^"]+)"', html).group(1)
 def flashes(html): return re.findall(r'class="alert alert-(\w+)">.*?<p>(.*?)</p>', html, re.S)
 def login(s, email, pw):
@@ -63,12 +66,12 @@ ok('data-follow-office="1"' in r.text and 'wa.me/964' in r.text, 'office page: f
 
 # ── Registration as office, listing with images
 o = sess()
-t = tok(o.get(B + '/register').text)
-r = o.post(B + '/register', data={'_csrf': t, 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
+html = o.get(B + '/register').text; t = tok(html); human()
+r = o.post(B + '/register', data={'_csrf': t, '_ft': ft(html), 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
                                    'office_name': '', 'password': 'secret123', 'password_confirm': 'secret123'})
 ok('Enter your office name' in r.text, 'office registration requires office name')
-t = tok(r.text)
-r = o.post(B + '/register', data={'_csrf': t, 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
+t = tok(r.text); f2 = ft(r.text); human()
+r = o.post(B + '/register', data={'_csrf': t, '_ft': f2, 'name': 'Test Office', 'email': 'office@example.com', 'phone': '0750 123 4567', 'role': 'agent',
                                    'office_name': 'Test Realty', 'password': 'secret123', 'password_confirm': 'secret123'})
 ok(r.url.endswith('/dashboard/office') and 'Test Realty' in r.text, 'office account + office profile created')
 t = tok(r.text)
@@ -132,11 +135,17 @@ if have_crypto:
     st = g.post(B + '/push/status', json={'endpoint': sub_match['endpoint']}, headers=h).json()
     ok(len(st.get('searches', [])) == 1 and st['searches'][0]['url'].startswith(PREFIX + '/properties?'), 'status lists saved search with link')
     ok(g.post(B + '/push/search', json={'subscription': fake_sub('https://evil.example/x'), 'query': {}}, headers=h).status_code == 422, 'saved search rejects non-push endpoint')
+    # location alerts: the new test listing is at 36.230,43.990 (Erbil)
+    sub_near = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-near-' + os.urandom(4).hex())
+    sub_far = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-far-' + os.urandom(4).hex())
+    r = g.post(B + '/push/search', json={'subscription': sub_near, 'query': {'type': 'house', 'near': '36.231,43.991', 'r': '1'}}, headers=h).json()
+    ok(r.get('ok') and 'Within 1 km' in r.get('label', ''), 'location alert saved: ' + r.get('label', ''))
+    g.post(B + '/push/search', json={'subscription': sub_far, 'query': {'type': 'house', 'near': '35.561,45.431', 'r': '5'}}, headers=h)
 
 # ── Authorization
 other = sess()
-t = tok(other.get(B + '/register').text)
-other.post(B + '/register', data={'_csrf': t, 'name': 'Other', 'email': 'other@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
+html = other.get(B + '/register').text; t = tok(html); human()
+other.post(B + '/register', data={'_csrf': t, '_ft': ft(html), 'name': 'Other', 'email': 'other@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
 ok(other.get(B + f'/dashboard/properties/{pid}/edit').status_code == 404, 'IDOR: cannot edit another office listing')
 ok(other.get(B + '/admin').status_code == 403, 'non-admin blocked from /admin')
 r = other.get(B + '/dashboard/notifications')
@@ -156,6 +165,33 @@ if have_crypto:
     st_o = g.post(B + '/push/status', json={'endpoint': sub_other['endpoint']}, headers=h).json()
     ok(st_m.get('subscribed') is False, 'matching saved search was pushed (fake FCM token → 410 → cleaned up)')
     ok(st_o.get('subscribed') is True and len(st_o['searches']) == 1, 'non-matching saved search untouched')
+    st_n = g.post(B + '/push/status', json={'endpoint': sub_near['endpoint']}, headers=h).json()
+    st_f = g.post(B + '/push/status', json={'endpoint': sub_far['endpoint']}, headers=h).json()
+    ok(st_n.get('subscribed') is False and st_f.get('subscribed') is True, 'location alert: device within 1 km pushed, device in another city not')
+
+# ── Location features
+import math
+def hav(a, b, c, d):
+    p = math.radians
+    x = math.sin(p(c - a) / 2) ** 2 + math.cos(p(a)) * math.cos(p(c)) * math.sin(p(d - b) / 2) ** 2
+    return 2 * 6371.0088 * math.asin(math.sqrt(x))
+pts = anon.get(B + '/api/map').json()['items']
+for (la, lo, rad) in [(36.191, 44.009, 3), (36.191, 44.009, 10), (35.561, 45.431, 5)]:
+    exp = [i for d, i in sorted((hav(la, lo, x['lat'], x['lng']), x['id']) for x in pts) if d <= rad]
+    page = anon.get(B + '/properties', params={'near': f'{la},{lo}', 'r': rad}).text
+    total = int(re.search(r'role="status">(\d+) results', page).group(1))
+    ids = list(dict.fromkeys(int(x) for x in re.findall(r'href="' + re.escape(PREFIX) + r'/property/(\d+)-', page.split('class="grid-cards"')[1])))
+    ok(total == len(exp) and ids == exp[:len(ids)], f'near {la},{lo} r={rad}km: exact radius + nearest-first ({total})')
+page = anon.get(B + '/properties', params={'near': '36.191,44.009', 'r': 10}).text
+ok(re.search(r'class="card-distance">.*?(\d+ m|[\d.]+ km)</span>', page, re.S) is not None and 'Near me · 10 km' in page, 'distance on cards + active near chip')
+ok('data-near-me' in anon.get(B + '/properties', params={'near': '999,abc'}).text, 'invalid coordinates ignored')
+d = anon.get(B + '/api/nearby', params={'near': '36.191,44.009'}).json()
+ok(d['ok'] and d['count'] >= 4 and 'property-card' in d['html'] and 'near=' in d['url'], f'nearby API ({d["count"]} within {d["radius"]} km)')
+ok(anon.get(B + '/api/nearby', params={'near': 'x'}).status_code == 422, 'nearby API validates input')
+d = anon.get(B + '/api/recommend', params={'ids': '1,2,3'}).json()
+ok(d['count'] > 0 and not re.search(r'/property/(1|2|3)-', d['html']), 'recommendations exclude already-viewed listings')
+r = anon.get(B + '/property/1')
+ok('Nearby' in r.text and 'geolocation=(self)' in r.headers.get('Permissions-Policy', ''), 'listing "Nearby" section + geolocation allowed for own origin only')
 
 # ── SEO
 ok(re.search(r'/property/\d+-[^"?]+', pr.url) is not None, 'listing redirected to canonical slug URL: ' + pr.url[len(B):][:40])
@@ -173,17 +209,33 @@ ok('fonts/noto-sans-arabic-wght.woff2' in anon.get(B + '/assets/css/app.css').te
 
 # ── Report a listing
 rp = sess(); html = rp.get(pr.url).text
-r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), 'reason': 'wrong_price', 'details': 'price is 200k'})
+r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), 'reason': 'fake', 'details': 'bot report'})
+ok('bot report' not in a.get(B + '/admin/reports').text, 'instant (bot) report silently ignored')
+human(2.2)
+r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), '_ft': ft(html), 'reason': 'wrong_price', 'details': 'price is 200k'})
 ok(any('Thank you' in m for _, m in flashes(r.text)), 'report submitted')
 ok('price is 200k' in a.get(B + '/admin/reports').text, 'admin sees report')
 ok('Possible duplicates' in a.get(B + '/admin/reports').text, 'duplicates section on admin reports page')
-html = a.get(B + '/admin/notifications').text
-ok('Broadcast' in html, 'admin notifications page')
-r = a.post(B + '/admin/notifications', data={'_csrf': tok(html), 'target': 'all', 'title': 'Welcome', 'body': 'Aqarat is live', 'property_id': ''})
-ok(any('Notification sent' in m for _, m in flashes(r.text)), 'admin broadcast')
-t = tok(a.get(B + '/admin/offices').text)
-a.post(B + f'/admin/offices/{office_id}/verify', data={'_csrf': t})
-ok('Verified' in anon.get(B + '/office/' + office_id).text, 'admin verifies office')
+
+# ── Enquiry: bot vs human (honeypot + minimum fill time)
+iq = sess(); html = iq.get(pr.url).text
+iq.post(B + f'/property/{pid}/inquiry', data={'_csrf': tok(html), 'name': 'Bot', 'email': 'bot@example.com', 'message': 'instant spam message here'})
+human()
+r = iq.post(B + f'/property/{pid}/inquiry', data={'_csrf': tok(html), '_ft': ft(html), 'name': 'Sara', 'email': 'sara@example.com', 'phone': '0750 555 1234', 'message': 'Is the house still available? Thanks'})
+inbox = o.get(B + '/dashboard/inquiries').text
+ok('sara@example.com' in inbox and 'bot@example.com' not in inbox, 'enquiry delivered to owner; instant bot enquiry dropped')
+
+# ── Spec hardening: .well-known, robots, noindex, headers, Argon2id
+ok(anon.get(B + '/.well-known/acme-challenge/test').status_code != 403, '/.well-known/ is not blocked (SSL renewal)')
+rob = anon.get(B + '/robots.txt').text
+ok('/admin' not in rob and 'Sitemap:' in rob, 'robots.txt does not advertise the admin path')
+ok('noindex' in a.get(B + '/admin').headers.get('X-Robots-Tag', '') and 'X-Robots-Tag' not in anon.get(B + '/').headers, 'noindex on private pages only')
+hdr = anon.get(B + '/').headers
+ok(hdr.get('Cross-Origin-Resource-Policy') == 'same-origin' and 'geolocation=(self)' in hdr.get('Permissions-Policy', ''), 'CORP + Permissions-Policy headers')
+sm = anon.get(B + '/sitemap.xml').text
+priv = anon.get(B + '/privacy')
+ok(priv.status_code == 200 and 'aqarat_sid' in priv.text and anon.get(B + '/terms').status_code == 200 and '/privacy' in sm, 'privacy (lists cookies/storage) + terms pages, in sitemap')
+ok('/privacy' in anon.get(B + '/').text, 'legal links in footer')
 
 # ── Videos: valid MP4 accepted, disguised script rejected
 mp4 = b'\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2' + b'\x00\x00\x00\x08free' + os.urandom(2048)
@@ -206,8 +258,41 @@ r = sess().post(B + '/login', data={'email': 'x', 'password': 'y'})
 ok(r.status_code == 403 and 'session expired' in r.text.lower(), 'POST without CSRF -> 403 "session expired"')
 x = sess()
 for _ in range(6):
-    r = x.post(B + '/login', data={'_csrf': tok(x.get(B + '/login').text), 'email': 'office@example.com', 'password': 'wrong'})
+    r = x.post(B + '/login', data={'_csrf': tok(x.get(B + '/login').text), 'email': 'other@example.com', 'password': 'wrong'})
 ok('Too many attempts' in r.text, 'login throttled')
+
+html = a.get(B + '/admin/notifications').text
+ok('Broadcast' in html, 'admin notifications page')
+r = a.post(B + '/admin/notifications', data={'_csrf': tok(html), 'target': 'all', 'title': 'Welcome', 'body': 'Aqarat is live', 'property_id': ''})
+ok(any('Notification sent' in m for _, m in flashes(r.text)), 'admin broadcast')
+t = tok(a.get(B + '/admin/offices').text)
+a.post(B + f'/admin/offices/{office_id}/verify', data={'_csrf': t})
+ok('Verified' in anon.get(B + '/office/' + office_id).text, 'admin verifies office')
+
+
+# ── Backup restores; data export; account deletion removes files
+html = a.get(B + '/admin').text
+bk = a.post(B + '/admin/backup', data={'_csrf': tok(html)})
+import sqlite3, tempfile
+tf = tempfile.NamedTemporaryFile(suffix='.sqlite', delete=False); tf.write(bk.content); tf.close()
+con = sqlite3.connect(tf.name)
+ok(bk.headers.get('Content-Type', '').startswith('application/vnd.sqlite3') and con.execute('SELECT COUNT(*) FROM properties').fetchone()[0] > 20
+   and con.execute('PRAGMA integrity_check').fetchone()[0] == 'ok', 'backup download restores (integrity ok, data present)')
+con.close(); os.unlink(tf.name)
+ok('backup.download' in a.get(B + '/admin').text and 'listing.status' in a.get(B + '/admin').text, 'admin audit log records actions')
+ex = o.get(B + '/dashboard/export')
+exj = ex.json()
+ok(exj['account']['email'] == 'office@example.com' and len(exj['listings']) >= 1 and 'photos' in exj['listings'][0], 'data export (JSON) contains account + listings')
+photo = exj['listings'][0]['photos'][0] if exj['listings'][0]['photos'] else None
+d = sess(); html = d.get(B + '/register').text; human()
+d.post(B + '/register', data={'_csrf': tok(html), '_ft': ft(html), 'name': 'Temp', 'email': 'temp@example.com', 'role': 'user', 'password': 'secret123', 'password_confirm': 'secret123'})
+html = d.get(B + '/dashboard/profile').text
+r = d.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'wrong'})
+ok('Delete my account' in r.text and login(sess(), 'temp@example.com', 'secret123').url.endswith('/dashboard'), 'delete account needs the right password')
+html = o.get(B + '/dashboard/profile').text
+r = o.post(B + '/dashboard/delete-account', data={'_csrf': tok(html), 'password': 'secret123'})
+ok(r.url.rstrip('/').endswith(PREFIX) and (photo is None or anon.get(B.rsplit(PREFIX, 1)[0] + photo).status_code == 404)
+   and anon.get(B + '/office/' + office_id).status_code == 404, 'account deletion removes office, listings and photo files')
 
 print(f'\n{fails} failure(s)')
 sys.exit(1 if fails else 0)
