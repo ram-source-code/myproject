@@ -153,6 +153,9 @@ function pwa_manifest(): void
     }
     $icons[] = ['src' => "$base/assets/img/icon-maskable-512.png", 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'];
 
+    while (ob_get_level() > 0) {      // nothing (a stray BOM/whitespace from an edited config) may precede the JSON
+        ob_end_clean();
+    }
     header('Content-Type: application/manifest+json; charset=utf-8');
     header('Cache-Control: public, max-age=3600');
     echo json_encode([
