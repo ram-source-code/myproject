@@ -36,7 +36,8 @@ anon = sess()
 r = anon.get(B + '/')
 ok(r.status_code == 200 and f'href="{PREFIX}/properties' in r.text, 'home renders with base-path links')
 ok(f'path={PREFIX}/' in r.headers.get('Set-Cookie', ''), 'session cookie scoped to install folder')
-m = anon.get(B + '/manifest.webmanifest').json()
+m = anon.get(B + '/manifest').json()
+assert anon.get(B + '/manifest.webmanifest').json()['name'] == m['name']
 ok(m['start_url'].startswith(PREFIX + '/') and m['scope'] == PREFIX + '/' and m['display'] == 'standalone', 'manifest scoped to folder')
 ok(anon.get(B + '/sw.js').status_code == 200 and anon.get(B + '/offline').status_code == 200, 'service worker + offline page served')
 for p in ['/app/config.php', '/data/aqarat.sqlite', '/data/vapid.json', '/README.md', '/bin/seed.php']:

@@ -60,6 +60,11 @@ function ensure_protection_files(): void
             @copy($tpl, $file);
         }
     }
+    // Older builds used "Options -ExecCGI" in uploads/, which many shared hosts reject with a 500 for every image.
+    $up = "$root/uploads/.htaccess";
+    if (is_file($up) && is_writable($up) && str_contains((string) @file_get_contents($up), 'ExecCGI')) {
+        @copy(__DIR__ . '/templates/htaccess-uploads.txt', $up);
+    }
     if (!is_dir("$root/uploads")) {
         @mkdir("$root/uploads", 0755, true);
         @copy(__DIR__ . '/templates/htaccess-uploads.txt', "$root/uploads/.htaccess");
@@ -89,7 +94,7 @@ if (PHP_SAPI !== 'cli') {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: camera=(), microphone=(), geolocation=(self), interest-cohort=()');   // location: own pages only, after the visitor allows it
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=(self)');   // location: own pages only, after the visitor allows it
     header('Cross-Origin-Opener-Policy: same-origin');
     header('Cross-Origin-Resource-Policy: same-origin');
     if (preg_match('#/(dashboard|admin|login|register|install|notifications|push|api)(/|$)#', (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH))) {

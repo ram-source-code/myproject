@@ -51,7 +51,7 @@ $useMap = $useMap ?? false;
     <meta name="app-base" content="<?= e(base_path()) ?>">
     <meta name="vapid-key" content="<?= e(vapid_keys()['public']) ?>">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
-    <link rel="manifest" href="<?= e(url('manifest.webmanifest')) ?>">
+    <link rel="manifest" href="<?= e(url('manifest')) ?>" crossorigin="use-credentials">
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
     <?php foreach (IOS_SPLASH as [$w, $h, $r]): ?>

@@ -32,6 +32,7 @@ function routes(): array
         ['GET',  '/api/nearby',                         'api_nearby'],
         ['GET',  '/api/recommend',                      'api_recommend'],
         ['POST', '/property/(\d+)/view',                'property_view_beacon'],
+        ['GET',  '/manifest',                           'pwa_manifest'],   // extension-less: front proxies never treat it as a static file
         ['GET',  '/manifest.webmanifest',               'pwa_manifest'],
         ['GET',  '/offline',                            'offline_page'],
         ['POST', '/push/search',                        'push_search_save'],
@@ -109,7 +110,7 @@ function dispatch(string $method, string $path): void
         run_maintenance();                                   // daily privacy/retention cleanup (cheap check)
     }
     // Until an administrator exists, every page leads to the guided installer.
-    if (!admin_exists() && !in_array($path, ['/install', '/manifest.webmanifest', '/offline', '/robots.txt'], true)) {
+    if (!admin_exists() && !in_array($path, ['/install', '/manifest', '/manifest.webmanifest', '/offline', '/robots.txt'], true)) {
         redirect(url('install'), 302);
     }
 

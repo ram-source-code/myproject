@@ -2,7 +2,7 @@
  * Lives in the install folder (e.g. /aqarat/sw.js) so its scope is that folder only. */
 'use strict';
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SCOPE = new URL(self.registration.scope);           // e.g. https://example.com/aqarat/
 const BASE = SCOPE.pathname.replace(/\/$/, '');            // e.g. /aqarat
 const STATIC = `static-${VERSION}`;

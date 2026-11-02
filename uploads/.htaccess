@@ -1,24 +1,29 @@
-# Uploaded files are images only: never execute anything here.
-Options -Indexes -ExecCGI
-<IfModule mod_php.c>
-    php_flag engine off
-</IfModule>
-<IfModule mod_php7.c>
-    php_flag engine off
-</IfModule>
-RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
-RemoveType .php .phtml .phar
-<FilesMatch "(?i)\.(php\d?|phtml|phar|pl|py|cgi|sh|html?|svg|js)$">
-    Require all denied
+# Uploaded media only. Every directive here is allowed on restrictive shared hosts
+# (cPanel-style "AllowOverride ... Options=Indexes,..."); anything unusual is wrapped in <IfModule>.
+Options -Indexes
+
+# Allowlist: only the formats the app itself writes can be fetched; everything else (php, html, svg, js, ...) is refused.
+<FilesMatch "(?i)^(?!.+\.(webp|mp4|webm|mov)$).*$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
+
+# Never hand a file to a script handler (belt and braces; mod_mime is FileInfo-level, allowed almost everywhere).
 <IfModule mod_mime.c>
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
     AddType image/webp .webp
     AddType video/mp4 .mp4
     AddType video/webm .webm
     AddType video/quicktime .mov
 </IfModule>
+
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
-    Header set Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+    Header set Content-Security-Policy "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox"
     Header set Cache-Control "public, max-age=31536000, immutable"
 </IfModule>
