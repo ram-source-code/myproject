@@ -54,7 +54,8 @@
     }
 
     /* ---------- Dominant-colour placeholders (computed at upload) ---------- */
-    $$('[data-color]').forEach((n) => { if (/^#[0-9a-f]{6}$/.test(n.dataset.color)) n.style.backgroundColor = n.dataset.color; });
+    const paintPlaceholders = (root = document) => $$('[data-color]', root).forEach((n) => { if (/^#[0-9a-f]{6}$/.test(n.dataset.color)) n.style.backgroundColor = n.dataset.color; });
+    paintPlaceholders();
 
     /* ---------- View transitions: morph the card photo into the listing hero (and back) ---------- */
     const pathOf = (u) => { try { return decodeURIComponent(new URL(u, location.href).pathname); } catch { return ''; } };
@@ -615,7 +616,7 @@
             const r = await postJSON('/push/search', { query, subscription: sub.toJSON() });
             btn.setAttribute('aria-pressed', 'true');
             $('span', btn).textContent = tr('alert_on');
-            toast(r.message + ' — ' + r.label);
+            toast(r.message + ' — ' + r.label + (btn.dataset.locationNote ? ' · ' + btn.dataset.locationNote : ''));
         } catch (err) {
             if (!err.silent) toast(err.data?.error || (err.message !== 'request' ? err.message : tr('push_unsupported')));
         } finally { btn.disabled = false; }
@@ -629,6 +630,119 @@
         const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
         if (out) out.textContent = [...inp.files].map((f) => `${f.name} (${mb(f.size)})`).join(' · ') + (big.length ? ' — ' + tr('file_too_big', { name: big.join(', ') }) : '');
         inp.setCustomValidity(big.length ? tr('file_too_big', { name: big.join(', ') }) : '');
+    }));
+
+    /* ---------- Location (browser Geolocation API — no external service) ---------- */
+    const LOC_KEY = 'aq-loc';
+    const round3 = (n) => Math.round(n * 1000) / 1000;              // ≈100 m: enough for "near me", kinder to privacy
+    function getLocation({ precise = false } = {}) {
+        return new Promise((resolve, reject) => {
+            if (!window.isSecureContext) return reject(new Error(tr('loc_insecure')));
+            if (!('geolocation' in navigator)) return reject(new Error(tr('loc_unavailable')));
+            if (!precise) {
+                try {
+                    const c = JSON.parse(sessionStorage.getItem(LOC_KEY) || 'null');
+                    if (c && Date.now() - c.t < 10 * 60 * 1000) return resolve(c);
+                } catch { /* ignore */ }
+            }
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const raw = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+                const loc = precise ? { ...raw, t: Date.now() } : { lat: round3(raw.lat), lng: round3(raw.lng), acc: raw.acc, t: Date.now() };
+                if (!precise) { try { sessionStorage.setItem(LOC_KEY, JSON.stringify(loc)); } catch { /* ignore */ } }
+                resolve(loc);
+            }, (err) => {
+                reject(new Error(err.code === 1 ? tr('loc_denied') : err.code === 3 ? tr('loc_timeout') : tr('loc_unavailable')));
+            }, { enableHighAccuracy: precise, timeout: precise ? 20000 : 12000, maximumAge: precise ? 0 : 5 * 60 * 1000 });
+        });
+    }
+    const nearParam = (loc) => `${round3(loc.lat).toFixed(3)},${round3(loc.lng).toFixed(3)}`;
+    const withQuery = (href, params) => {
+        const u = new URL(href, location.href);
+        Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+        return u.pathname + u.search;
+    };
+
+    // "Near me" chip on the results page
+    $$('[data-near-me]').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.classList.add('is-locating');
+        try {
+            const loc = await getLocation();
+            location.href = withQuery(btn.dataset.target, { near: nearParam(loc), r: 5, sort: 'nearest' });
+        } catch (err) {
+            toast(err.message);
+            btn.disabled = false;
+            btn.classList.remove('is-locating');
+        }
+    }));
+
+    // Home: "Near you" row (+ city fallback) and "Recommended for you"
+    const nearSec = $('[data-near-section]');
+    if (nearSec) {
+        const prompt = $('[data-near-prompt]', nearSec);
+        const fallback = $('[data-near-fallback]', nearSec);
+        const list = $('[data-near-list]', nearSec);
+        const showFallback = (msg) => { prompt.hidden = true; fallback.hidden = false; if (msg) $('[data-near-msg]', fallback).textContent = msg; };
+        const load = async () => {
+            const btn = $('[data-near-load]', nearSec);
+            if (btn) { btn.disabled = true; btn.classList.add('is-locating'); }
+            try {
+                const loc = await getLocation();
+                const r = await fetch(nearSec.dataset.endpoint + '?near=' + encodeURIComponent(nearParam(loc)), { headers: { Accept: 'application/json' } });
+                const d = await r.json();
+                if (!d.ok || !d.count) { showFallback(tr('near_none')); return; }
+                prompt.hidden = true;
+                list.insertAdjacentHTML('beforeend', d.html);       // server-rendered, escaped markup from our own API
+                paintPlaceholders(list);
+                $('[data-near-title]', nearSec).textContent = d.title;
+                const all = $('[data-near-all]', nearSec);
+                all.href = d.url;
+                all.hidden = false;
+                loadReco(loc);
+            } catch (err) {
+                showFallback(err.message + ' ' + tr('pick_city'));
+            } finally {
+                if (btn) { btn.disabled = false; btn.classList.remove('is-locating'); }
+            }
+        };
+        $('[data-near-load]', nearSec)?.addEventListener('click', load);
+        if (!window.isSecureContext || !('geolocation' in navigator)) showFallback();
+        else navigator.permissions?.query({ name: 'geolocation' }).then((st) => {
+            if (st.state === 'granted') load();                     // already allowed: no prompt, just show results
+            else if (st.state === 'denied') showFallback();
+        }).catch(() => {});
+    }
+    let recoLoaded = false;
+    function loadReco(loc) {
+        const sec = $('[data-reco-section]');
+        if (!sec || recoLoaded) return;
+        const ids = store.get('recent', []).map((r) => Number(r.id)).filter(Boolean).slice(0, 12);
+        if (!ids.length) return;
+        recoLoaded = true;
+        const q = '?ids=' + ids.join(',') + (loc ? '&near=' + encodeURIComponent(nearParam(loc)) : '');
+        fetch(sec.dataset.endpoint + q, { headers: { Accept: 'application/json' } }).then((r) => r.json()).then((d) => {
+            if (!d.ok || !d.count) return;
+            const list = $('[data-reco-list]', sec);
+            list.insertAdjacentHTML('beforeend', d.html);
+            paintPlaceholders(list);
+            sec.hidden = false;
+        }).catch(() => {});
+    }
+    if ($('[data-reco-section]')) setTimeout(() => loadReco(null), 0);
+
+    // Listing form: office stands at the property → precise pin
+    $$('[data-use-my-location]').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.classList.add('is-locating');
+        try {
+            const loc = await getLocation({ precise: true });
+            const lat = $('#f-lat'), lng = $('#f-lng');
+            lat.value = loc.lat.toFixed(6);
+            lng.value = loc.lng.toFixed(6);
+            lat.dispatchEvent(new Event('change'));
+            lng.dispatchEvent(new Event('change'));
+            toast(tr('loc_set', { m: Math.round(loc.acc || 0) }));
+        } catch (err) { toast(err.message); } finally { btn.disabled = false; btn.classList.remove('is-locating'); }
     }));
 
     /* ---------- Maps (Leaflet + markercluster, self-hosted JS; configurable tile server) ---------- */
@@ -661,11 +775,58 @@
             })
             : window.L.layerGroup();
         map.addLayer(group);
+
+        // Active "near" search: show the centre and radius
+        const nearPt = (resultsMap.dataset.near || '').split(',').map(Number);
+        if (nearPt.length === 2 && nearPt.every(Number.isFinite) && Number(resultsMap.dataset.radius) > 0) {
+            window.L.circle(nearPt, { radius: Number(resultsMap.dataset.radius) * 1000, color: '#0f766e', weight: 2, fillOpacity: 0.06, interactive: false }).addTo(map);
+            window.L.marker(nearPt, { icon: window.L.divIcon({ className: 'me-pin', iconSize: [18, 18] }), keyboard: false, interactive: false }).addTo(map);
+        }
+
+        // Locate-me control
+        const Locate = window.L.Control.extend({
+            options: { position: 'topleft' },
+            onAdd() {
+                const b = el('button', { type: 'button', class: 'map-ctrl', 'aria-label': tr('locate_me'), title: tr('locate_me') }, icon('locate'));
+                window.L.DomEvent.disableClickPropagation(b);
+                let me = null;
+                b.addEventListener('click', async () => {
+                    b.classList.add('is-locating');
+                    try {
+                        const loc = await getLocation();
+                        me?.remove();
+                        me = window.L.layerGroup([
+                            window.L.circle([loc.lat, loc.lng], { radius: Math.max(loc.acc || 0, 100), color: '#2563eb', weight: 1, fillOpacity: 0.1, interactive: false }),
+                            window.L.marker([loc.lat, loc.lng], { icon: window.L.divIcon({ className: 'me-pin', iconSize: [18, 18] }), keyboard: false, interactive: false }),
+                        ]).addTo(map);
+                        map.setView([loc.lat, loc.lng], 14);
+                    } catch (err) { toast(err.message); } finally { b.classList.remove('is-locating'); }
+                });
+                return b;
+            },
+        });
+        map.addControl(new Locate());
+
+        // "Search this area" after the visitor pans/zooms the map
+        const areaBtn = el('button', { type: 'button', class: 'btn btn-primary btn-sm map-area-btn', hidden: true }, icon('search'), el('span', { text: tr('search_this_area') }));
+        resultsMap.parentElement.append(areaBtn);
+        let userMoved = false;
+        map.on('dragstart zoomstart', () => { userMoved = true; });
+        map.on('moveend', () => { if (userMoved) areaBtn.hidden = false; });
+        areaBtn.addEventListener('click', () => {
+            const c = map.getCenter();
+            const corner = map.getBounds().getNorthEast();
+            const km = map.distance(c, corner) / 1000;
+            const radii = [1, 2, 3, 5, 10, 25, 50];
+            const r = radii.find((x) => x >= km * 0.75) || 50;
+            location.href = withQuery(resultsMap.dataset.searchArea, { near: nearParam({ lat: c.lat, lng: c.lng }), r, sort: 'nearest' });
+        });
         fetch(resultsMap.dataset.endpoint, { headers: { Accept: 'application/json' } })
             .then((r) => r.json())
             .then(({ items = [] }) => {
                 if (!items.length) {
                     resultsMap.after(el('p', { class: 'muted map-note', text: tr('map_empty') }));
+                    if (nearPt.length === 2 && nearPt.every(Number.isFinite)) map.setView(nearPt, 12);
                     return;
                 }
                 const bounds = [];
@@ -677,11 +838,13 @@
                     const card = el('a', { class: 'map-card', href: p.url },
                         p.thumb ? el('img', { src: p.thumb, alt: '', width: 220, height: 147 }) : null,
                         el('strong', { class: 'map-card-price', text: p.price }),
+                        p.dist ? el('span', { class: 'card-distance', text: p.dist }) : null,
                         el('span', { class: 'map-card-title', text: p.title }),
                         el('span', { class: 'muted small', text: [p.type, p.beds ? `${p.beds} ${tr('beds_short')}` : '', `${Math.round(p.area)} ${tr('sqm')}`].filter(Boolean).join(' · ') }));
                     m.bindPopup(card, { maxWidth: 240, minWidth: 220 });
                     bounds.push([p.lat, p.lng]);
                 });
+                if (nearPt.length === 2 && nearPt.every(Number.isFinite)) bounds.push(nearPt);
                 map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
             })
             .catch(() => {});

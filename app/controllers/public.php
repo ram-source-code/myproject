@@ -69,6 +69,7 @@ function property_show(int $id): void
     }
 
     render('properties/show', [
+        'nearby'    => $nearby = ($p['lat'] !== null ? nearby_properties((float) $p['lat'], (float) $p['lng'], 3, 4, $id) : []),
         'videos'    => property_videos($id),
         'seo'       => property_seo($p),
         'useMap'    => $p['lat'] !== null && $p['lng'] !== null,
@@ -77,7 +78,7 @@ function property_show(int $id): void
         'metaDesc'  => str_limit(preg_replace('/\s+/u', ' ', $p['description']) ?? '', 160),
         'p'         => $p,
         'images'    => property_images($id),
-        'similar'   => similar_properties($p),
+        'similar'   => array_slice(array_values(array_filter(similar_properties($p, 8), static fn($s) => !in_array($s['id'], array_column($nearby, 'id'), true))), 0, 4),
         'features'  => json_decode($p['features'], true) ?: [],
     ]);
 }
@@ -222,4 +223,54 @@ function api_count(): void
     $n = (int) $stmt->fetchColumn();
     header('Cache-Control: private, max-age=30');
     json_out(['ok' => true, 'count' => $n, 'label' => t('show_n_results', ['n' => number_format($n)])]);
+}
+
+
+/* ───────────── Location: "near you" row and recommendations (JSON with server-rendered, escaped cards) ───────────── */
+
+function cards_html(array $rows): string
+{
+    $html = '';
+    foreach ($rows as $p) {
+        $html .= render_partial('partials/card', ['p' => $p]);
+    }
+    return $html;
+}
+
+/** Nearest listings around the visitor; widens the radius until there is enough to show. */
+function api_nearby(): void
+{
+    $pt = parse_near($_GET['near'] ?? null);
+    if ($pt === null) {
+        json_out(['ok' => false, 'error' => 'near'], 422);
+    }
+    $purpose = in_array($_GET['purpose'] ?? '', PROPERTY_PURPOSES, true) ? $_GET['purpose'] : '';
+    $rows = [];
+    $used = 3;
+    foreach ([3, 10, 25, 50] as $r) {
+        $used = $r;
+        $rows = array_values(array_filter(nearby_properties($pt[0], $pt[1], $r, 12), static fn($p) => $purpose === '' || $p['purpose'] === $purpose));
+        if (count($rows) >= 4) {
+            break;
+        }
+    }
+    $rows = array_slice($rows, 0, 8);
+    header('Cache-Control: private, max-age=120');
+    json_out([
+        'ok'     => true,
+        'count'  => count($rows),
+        'radius' => $used,
+        'title'  => t('near_you_within', ['r' => $used]),
+        'html'   => cards_html($rows),
+        'url'    => url('properties', ['near' => near_string($pt[0], $pt[1]), 'r' => $used, 'purpose' => $purpose]),
+    ]);
+}
+
+/** "Recommended for you" from ids the browser keeps locally (recently viewed + saved). */
+function api_recommend(): void
+{
+    $ids = array_slice(array_map('intval', explode(',', (string) ($_GET['ids'] ?? ''))), 0, 20);
+    $rows = recommend_properties($ids, 8, parse_near($_GET['near'] ?? null));
+    header('Cache-Control: private, max-age=120');
+    json_out(['ok' => true, 'count' => count($rows), 'html' => cards_html($rows)]);
 }

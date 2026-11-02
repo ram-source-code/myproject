@@ -466,6 +466,8 @@ function listing_matches_filters(array $p, array $f): bool
         || ($f['baths'] !== null && (int) $p['bathrooms'] < $f['baths'])
         || ($f['furnished'] && !(int) $p['furnished'])
         || ($f['office'] !== null && (int) ($p['office_id'] ?? 0) !== $f['office'])
+        || (($pt = parse_near($f['near'] ?? '')) !== null && ($p['lat'] === null
+            || distance_km($pt[0], $pt[1], (float) $p['lat'], (float) $p['lng']) > (float) $f['r']))
         || ($f['q'] !== '' && !text_matches_all($f['q'], $p['title'] . ' ' . $p['description'] . ' ' . $p['district'] . ' ' . $p['address'] . ' ' . $p['project']))
     );
 }
@@ -484,6 +486,9 @@ function text_matches_all(string $q, string $haystack): bool
 function compact_filters(array $f): array
 {
     unset($f['sort']);
+    if (($f['near'] ?? '') === '') {
+        unset($f['r']);
+    }
     return array_filter($f, static fn($v) => $v !== null && $v !== '' && $v !== 0 && $v !== false);
 }
 
@@ -506,5 +511,6 @@ function search_label(array $f): string
     if (!empty($f['deed'])) { $parts[] = t('deed_' . $f['deed']); }
     if (!empty($f['furnished'])) { $parts[] = t('furnished'); }
     if (!empty($f['q'])) { $parts[] = '“' . $f['q'] . '”'; }
+    if (!empty($f['near'])) { $parts[] = t('within_km', ['r' => (int) ($f['r'] ?? 5)]); }
     return $parts ? implode(' · ', $parts) : t('all_listings');
 }

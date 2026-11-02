@@ -29,6 +29,8 @@ function routes(): array
         ['POST', '/push/status',                        'push_status'],
         ['GET',  '/api/map',                            'api_map'],
         ['GET',  '/api/count',                          'api_count'],
+        ['GET',  '/api/nearby',                         'api_nearby'],
+        ['GET',  '/api/recommend',                      'api_recommend'],
         ['POST', '/property/(\d+)/view',                'property_view_beacon'],
         ['GET',  '/manifest.webmanifest',               'pwa_manifest'],
         ['GET',  '/offline',                            'offline_page'],

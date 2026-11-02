@@ -256,6 +256,18 @@ $isLive = $p['status'] === 'published';
         </aside>
     </div>
 
+    <?php if (!empty($nearby)): ?>
+    <section class="section cv" aria-labelledby="nearby-h">
+        <h2 id="nearby-h" class="section-title"><svg class="title-icon" aria-hidden="true"><use href="#i-locate"></use></svg><?= e(t('nearby_listings')) ?></h2>
+        <p class="muted section-sub"><?= e(t('nearby_sub')) ?></p>
+        <div class="grid-cards">
+            <?php foreach ($nearby as $np): ?>
+                <?= render_partial('partials/card', ['p' => $np]) ?>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <?php if ($similar): ?>
     <section class="section cv" aria-labelledby="similar-h">
         <h2 id="similar-h" class="section-title"><?= e(t('similar_listings')) ?></h2>

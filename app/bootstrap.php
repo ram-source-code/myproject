@@ -8,6 +8,7 @@ require __DIR__ . '/db.php';
 require __DIR__ . '/image.php';
 require __DIR__ . '/models.php';
 require __DIR__ . '/push.php';
+require __DIR__ . '/geo.php';
 
 date_default_timezone_set(config('timezone', 'UTC'));
 mb_internal_encoding('UTF-8');
@@ -88,7 +89,7 @@ if (PHP_SAPI !== 'cli') {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=(self), interest-cohort=()');   // location: own pages only, after the visitor allows it
     header('Cross-Origin-Opener-Policy: same-origin');
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');

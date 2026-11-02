@@ -202,6 +202,7 @@ function api_map(): void
         'area'  => (float) $p['area'],
         'type'  => t('type_' . $p['type']),
         'url'   => property_url($p),
+        'dist'  => isset($p['distance_km']) ? format_distance((float) $p['distance_km']) : null,
         'thumb' => $p['cover_thumb'] ? upload_url($p['cover_thumb']) : null,
     ], $rows)]);
 }

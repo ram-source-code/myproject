@@ -121,6 +121,7 @@ $errs = errors();
                 </div>
                 <div class="field">
                     <p class="field-label"><?= e(t('pin_on_map')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></p>
+                    <button type="button" class="btn btn-outline btn-sm" data-use-my-location><svg aria-hidden="true"><use href="#i-locate"></use></svg><?= e(t('use_my_location')) ?></button>
                     <div class="picker-map" data-picker-map data-center="<?= e(implode(',', config('map_center'))) ?>" role="application" aria-label="<?= e(t('pin_on_map')) ?>"></div>
                     <p class="hint"><?= e(t('pin_hint')) ?></p>
                 </div>

@@ -36,6 +36,9 @@ function db(): PDO
     $pdo->exec('PRAGMA cache_size = -16000');    // ~16 MB
 
     migrate($pdo);
+    if (function_exists('register_geo_functions')) {
+        register_geo_functions($pdo);
+    }
     return $pdo;
 }
 

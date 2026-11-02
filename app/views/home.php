@@ -43,6 +43,36 @@
     </ul>
 </section>
 
+<section class="section section-tight container for-you" aria-labelledby="near-h" data-near-section
+         data-endpoint="<?= e(url('api/nearby')) ?>">
+    <div class="section-head">
+        <h2 id="near-h" class="section-title"><svg class="title-icon" aria-hidden="true"><use href="#i-locate"></use></svg><span data-near-title><?= e(t('near_you')) ?></span></h2>
+        <a class="link-arrow" href="<?= e(url('properties')) ?>" data-near-all hidden><?= e(t('view_all')) ?><svg aria-hidden="true"><use href="#i-chevron"></use></svg></a>
+    </div>
+    <div class="near-prompt" data-near-prompt>
+        <p class="muted"><?= e(t('near_prompt')) ?></p>
+        <button type="button" class="btn btn-primary" data-near-load><svg aria-hidden="true"><use href="#i-locate"></use></svg><?= e(t('show_near_me')) ?></button>
+        <p class="muted small"><svg class="inline-icon" aria-hidden="true"><use href="#i-eye"></use></svg> <?= e(t('loc_privacy')) ?></p>
+    </div>
+    <div class="near-fallback" data-near-fallback hidden>
+        <p class="muted" data-near-msg><?= e(t('pick_city')) ?></p>
+        <ul class="type-chips scroll-x">
+            <?php foreach ($topCities as $c): ?>
+                <li><a class="type-chip" href="<?= e(url('city/' . $c['slug'])) ?>"><svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e(city_name($c)) ?></a></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+    <div class="grid-cards" data-near-list aria-live="polite"></div>
+</section>
+
+<section class="section section-tight container" data-reco-section hidden aria-labelledby="reco-h" data-endpoint="<?= e(url('api/recommend')) ?>">
+    <div class="section-head">
+        <h2 id="reco-h" class="section-title"><svg class="title-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><?= e(t('recommended_for_you')) ?></h2>
+        <p class="muted small"><?= e(t('reco_why')) ?></p>
+    </div>
+    <div class="grid-cards" data-reco-list></div>
+</section>
+
 <section class="section section-tight container" data-recent-section hidden aria-labelledby="recent-h">
     <div class="section-head">
         <h2 id="recent-h" class="section-title"><?= e(t('recently_viewed')) ?></h2>

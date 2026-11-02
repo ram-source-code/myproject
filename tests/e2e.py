@@ -132,6 +132,12 @@ if have_crypto:
     st = g.post(B + '/push/status', json={'endpoint': sub_match['endpoint']}, headers=h).json()
     ok(len(st.get('searches', [])) == 1 and st['searches'][0]['url'].startswith(PREFIX + '/properties?'), 'status lists saved search with link')
     ok(g.post(B + '/push/search', json={'subscription': fake_sub('https://evil.example/x'), 'query': {}}, headers=h).status_code == 422, 'saved search rejects non-push endpoint')
+    # location alerts: the new test listing is at 36.230,43.990 (Erbil)
+    sub_near = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-near-' + os.urandom(4).hex())
+    sub_far = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-far-' + os.urandom(4).hex())
+    r = g.post(B + '/push/search', json={'subscription': sub_near, 'query': {'type': 'house', 'near': '36.231,43.991', 'r': '1'}}, headers=h).json()
+    ok(r.get('ok') and 'Within 1 km' in r.get('label', ''), 'location alert saved: ' + r.get('label', ''))
+    g.post(B + '/push/search', json={'subscription': sub_far, 'query': {'type': 'house', 'near': '35.561,45.431', 'r': '5'}}, headers=h)
 
 # ── Authorization
 other = sess()
@@ -156,6 +162,33 @@ if have_crypto:
     st_o = g.post(B + '/push/status', json={'endpoint': sub_other['endpoint']}, headers=h).json()
     ok(st_m.get('subscribed') is False, 'matching saved search was pushed (fake FCM token → 410 → cleaned up)')
     ok(st_o.get('subscribed') is True and len(st_o['searches']) == 1, 'non-matching saved search untouched')
+    st_n = g.post(B + '/push/status', json={'endpoint': sub_near['endpoint']}, headers=h).json()
+    st_f = g.post(B + '/push/status', json={'endpoint': sub_far['endpoint']}, headers=h).json()
+    ok(st_n.get('subscribed') is False and st_f.get('subscribed') is True, 'location alert: device within 1 km pushed, device in another city not')
+
+# ── Location features
+import math
+def hav(a, b, c, d):
+    p = math.radians
+    x = math.sin(p(c - a) / 2) ** 2 + math.cos(p(a)) * math.cos(p(c)) * math.sin(p(d - b) / 2) ** 2
+    return 2 * 6371.0088 * math.asin(math.sqrt(x))
+pts = anon.get(B + '/api/map').json()['items']
+for (la, lo, rad) in [(36.191, 44.009, 3), (36.191, 44.009, 10), (35.561, 45.431, 5)]:
+    exp = [i for d, i in sorted((hav(la, lo, x['lat'], x['lng']), x['id']) for x in pts) if d <= rad]
+    page = anon.get(B + '/properties', params={'near': f'{la},{lo}', 'r': rad}).text
+    total = int(re.search(r'role="status">(\d+) results', page).group(1))
+    ids = list(dict.fromkeys(int(x) for x in re.findall(r'href="' + re.escape(PREFIX) + r'/property/(\d+)-', page.split('class="grid-cards"')[1])))
+    ok(total == len(exp) and ids == exp[:len(ids)], f'near {la},{lo} r={rad}km: exact radius + nearest-first ({total})')
+page = anon.get(B + '/properties', params={'near': '36.191,44.009', 'r': 10}).text
+ok(re.search(r'class="card-distance">.*?(\d+ m|[\d.]+ km)</span>', page, re.S) is not None and 'Near me · 10 km' in page, 'distance on cards + active near chip')
+ok('data-near-me' in anon.get(B + '/properties', params={'near': '999,abc'}).text, 'invalid coordinates ignored')
+d = anon.get(B + '/api/nearby', params={'near': '36.191,44.009'}).json()
+ok(d['ok'] and d['count'] >= 4 and 'property-card' in d['html'] and 'near=' in d['url'], f'nearby API ({d["count"]} within {d["radius"]} km)')
+ok(anon.get(B + '/api/nearby', params={'near': 'x'}).status_code == 422, 'nearby API validates input')
+d = anon.get(B + '/api/recommend', params={'ids': '1,2,3'}).json()
+ok(d['count'] > 0 and not re.search(r'/property/(1|2|3)-', d['html']), 'recommendations exclude already-viewed listings')
+r = anon.get(B + '/property/1')
+ok('Nearby' in r.text and 'geolocation=(self)' in r.headers.get('Permissions-Policy', ''), 'listing "Nearby" section + geolocation allowed for own origin only')
 
 # ── SEO
 ok(re.search(r'/property/\d+-[^"?]+', pr.url) is not None, 'listing redirected to canonical slug URL: ' + pr.url[len(B):][:40])

@@ -45,8 +45,21 @@ function search_filters(array $src): array
         'furnished' => !empty($src['furnished']) ? 1 : null,
         'deed'      => in_array($src['deed'] ?? '', DEED_TYPES, true) ? $src['deed'] : '',
         'office'    => input_int('office', null, $src),
-        'sort'      => in_array($src['sort'] ?? '', ['newest', 'price_asc', 'price_desc', 'area_desc', 'popular'], true) ? $src['sort'] : 'newest',
+        'sort'      => in_array($src['sort'] ?? '', ['newest', 'nearest', 'price_asc', 'price_desc', 'area_desc', 'popular'], true) ? $src['sort'] : 'newest',
+        'near'      => '',
+        'r'         => null,
     ];
+    // Location ("near=lat,lng" + radius r in km) — rounded to ~100 m, never stored by search itself
+    if (($pt = parse_near($src['near'] ?? null)) !== null) {
+        $f['near'] = near_string($pt[0], $pt[1]);
+        $r = input_int('r', 5, $src) ?? 5;
+        $f['r'] = in_array($r, NEAR_RADII, true) ? $r : 5;
+        if (!isset($src['sort']) || $src['sort'] === '') {
+            $f['sort'] = 'nearest';
+        }
+    } elseif ($f['sort'] === 'nearest') {
+        $f['sort'] = 'newest';
+    }
     return $f;
 }
 
@@ -74,31 +87,45 @@ function search_where(array $f): array
     if ($f['beds']      !== null) { $where[] = 'p.bedrooms >= ?';  $args[] = $f['beds']; }
     if ($f['baths']     !== null) { $where[] = 'p.bathrooms >= ?'; $args[] = $f['baths']; }
     if ($f['furnished'])          { $where[] = 'p.furnished = 1'; }
+    if ($f['near'] !== '' && ($pt = parse_near($f['near'])) !== null) {
+        [$gw, $ga] = geo_sql($pt[0], $pt[1], (float) $f['r']);
+        $where[] = $gw;
+        array_push($args, ...$ga);
+    }
     return [implode(' AND ', $where), $args];
 }
 
-function search_order(array $f): string
+/** @return array{0:string,1:array} ORDER BY sql + its bound args */
+function search_order(array $f): array
 {
-    return match ($f['sort']) {
+    if ($f['sort'] === 'nearest' && ($pt = parse_near($f['near'])) !== null) {
+        [, , $go, $goa] = geo_sql($pt[0], $pt[1], (float) $f['r']);
+        return [$go, $goa];
+    }
+    return [match ($f['sort']) {
         'price_asc'  => 'p.price_usd ASC',
         'price_desc' => 'p.price_usd DESC',
         'area_desc'  => 'p.area DESC',
         'popular'    => 'p.views DESC',
         default      => 'p.is_featured DESC, p.created_at DESC',
-    };
+    }, []];
 }
 
 function search_properties(array $f, int $page, int $perPage): array
 {
     [$w, $args] = search_where($f);
-    $order = search_order($f);
+    [$order, $orderArgs] = search_order($f);
     $cnt = db()->prepare("SELECT COUNT(*) FROM properties p WHERE $w");
     $cnt->execute($args);
     $pg = paginate((int) $cnt->fetchColumn(), $perPage, $page);
 
     $stmt = db()->prepare(PROPERTY_SELECT . " WHERE $w ORDER BY $order, p.id DESC LIMIT ? OFFSET ?");
-    $stmt->execute([...$args, $pg['per_page'], $pg['offset']]);
-    return [$stmt->fetchAll(), $pg];
+    $stmt->execute([...$args, ...$orderArgs, $pg['per_page'], $pg['offset']]);
+    $rows = $stmt->fetchAll();
+    if (($pt = parse_near($f['near'])) !== null) {
+        $rows = with_distances($rows, $pt[0], $pt[1]);
+    }
+    return [$rows, $pg];
 }
 
 /** Lightweight rows for the map view (only listings with coordinates). */
@@ -109,7 +136,11 @@ function map_properties(array $f, int $limit = 500): array
             (SELECT thumb FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_thumb
         FROM properties p WHERE $w AND p.lat IS NOT NULL AND p.lng IS NOT NULL ORDER BY p.is_featured DESC, p.created_at DESC LIMIT ?");
     $stmt->execute([...$args, $limit]);
-    return $stmt->fetchAll();
+    $rows = $stmt->fetchAll();
+    if (($pt = parse_near($f['near'])) !== null) {
+        $rows = with_distances($rows, $pt[0], $pt[1]);
+    }
+    return $rows;
 }
 
 
