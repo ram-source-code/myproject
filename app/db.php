@@ -271,5 +271,77 @@ function migrations(): array
         END;
         INSERT INTO properties_fts(properties_fts) VALUES ('rebuild');
         SQL,
+
+        // v3 — videos, saved-search alerts, reports, duplicate detection
+        <<<SQL
+        ALTER TABLE property_images ADD COLUMN phash TEXT;          -- 64-bit dHash (16 hex) of the original photo
+        CREATE INDEX idx_images_phash ON property_images(phash);
+
+        CREATE TABLE property_videos (
+            id          INTEGER PRIMARY KEY,
+            property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+            filename    TEXT    NOT NULL,
+            mime        TEXT    NOT NULL,
+            size        INTEGER NOT NULL,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_videos_property ON property_videos(property_id);
+
+        CREATE TABLE saved_searches (
+            id              INTEGER PRIMARY KEY,
+            subscription_id INTEGER NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+            filters         TEXT    NOT NULL,          -- normalised JSON of search_filters()
+            label           TEXT    NOT NULL DEFAULT '',
+            hits            INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            UNIQUE (subscription_id, filters)
+        );
+
+        CREATE TABLE reports (
+            id          INTEGER PRIMARY KEY,
+            property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+            reason      TEXT    NOT NULL CHECK (reason IN ('sold','wrong_price','fake','duplicate','wrong_location','offensive','other')),
+            details     TEXT    NOT NULL DEFAULT '',
+            ip          TEXT    NOT NULL DEFAULT '',
+            status      TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_reports_status ON reports(status, property_id);
+        CREATE INDEX idx_reports_ip ON reports(ip, created_at);
+
+        CREATE TABLE duplicate_flags (
+            property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+            other_id    INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+            reason      TEXT    NOT NULL,                -- 'photo' or 'location'
+            distance    INTEGER NOT NULL DEFAULT 0,      -- photo hash Hamming distance
+            dismissed   INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (property_id, other_id)
+        ) WITHOUT ROWID;
+
+        -- notifications: add the 'search' audience (alert for one device's saved search)
+        CREATE TABLE notifications_v3 (
+            id              INTEGER PRIMARY KEY,
+            sender_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            office_id       INTEGER REFERENCES offices(id) ON DELETE CASCADE,
+            subscription_id INTEGER REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+            audience        TEXT    NOT NULL CHECK (audience IN ('followers','all','search')),
+            kind            TEXT    NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','auto')),
+            title           TEXT    NOT NULL,
+            body            TEXT    NOT NULL,
+            url             TEXT    NOT NULL DEFAULT '/',
+            property_id     INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+            sent            INTEGER NOT NULL DEFAULT 0,
+            failed          INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO notifications_v3 (id, sender_id, office_id, audience, kind, title, body, url, property_id, sent, failed, created_at)
+            SELECT id, sender_id, office_id, audience, kind, title, body, url, property_id, sent, failed, created_at FROM notifications;
+        DROP TABLE notifications;
+        ALTER TABLE notifications_v3 RENAME TO notifications;
+        CREATE INDEX idx_notifications_office ON notifications(office_id, created_at);
+        CREATE INDEX idx_notifications_sub ON notifications(subscription_id, created_at);
+        CREATE INDEX idx_notifications_prop ON notifications(property_id, kind);
+        SQL,
     ];
 }

@@ -438,6 +438,24 @@
                         el('span', { text: o.name })),
                     unf));
             });
+            const sl = $('[data-search-list]', center);
+            if (sl) {
+                sl.replaceChildren();
+                if (!st.searches?.length) sl.append(el('li', { class: 'muted', text: tr('no_searches') }));
+                (st.searches || []).forEach((q) => {
+                    const del = el('button', { type: 'button', class: 'btn btn-ghost btn-sm text-danger', text: tr('delete') });
+                    del.addEventListener('click', async () => {
+                        const sub = await currentSub();
+                        await postJSON('/push/search/delete', { id: q.id, endpoint: sub ? sub.endpoint : '' }).catch(() => {});
+                        statusPromise = null;
+                        paint(await getStatus());
+                    });
+                    sl.append(el('li', {},
+                        el('a', { href: q.url, class: 'follow-item' }, icon('search'), el('span', { text: q.label }),
+                            q.hits ? el('span', { class: 'badge', text: String(q.hits) }) : null),
+                        del));
+                });
+            }
             feed.replaceChildren();
             if (!st.feed?.length) feed.append(el('li', { class: 'muted', text: tr('no_feed') }));
             (st.feed || []).forEach((n) => feed.append(el('li', {},
@@ -469,12 +487,45 @@
         });
     }
 
-    /* ---------- Maps (Leaflet, self-hosted; OSM tiles) ---------- */
+    /* ---------- Save the current search as a push alert ---------- */
+    $$('[data-save-search]').forEach((btn) => btn.addEventListener('click', async () => {
+        let query = {};
+        try { query = JSON.parse(btn.dataset.saveSearch || '{}'); } catch { /* ignore */ }
+        btn.disabled = true;
+        try {
+            const sub = await ensureSub();
+            const r = await postJSON('/push/search', { query, subscription: sub.toJSON() });
+            btn.setAttribute('aria-pressed', 'true');
+            $('span', btn).textContent = tr('alert_on');
+            toast(r.message + ' — ' + r.label);
+        } catch (err) {
+            toast(err.data?.error || (err.message !== 'request' ? err.message : tr('push_unsupported')));
+        } finally { btn.disabled = false; }
+    }));
+
+    /* ---------- Video upload: client-side size check ---------- */
+    $$('[data-video-input]').forEach((inp) => inp.addEventListener('change', () => {
+        const max = Number(inp.dataset.maxBytes);
+        const out = inp.closest('.field')?.querySelector('[data-video-status]');
+        const big = [...inp.files].filter((f) => f.size > max).map((f) => f.name);
+        const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
+        if (out) out.textContent = [...inp.files].map((f) => `${f.name} (${mb(f.size)})`).join(' · ') + (big.length ? ' — ' + tr('file_too_big', { name: big.join(', ') }) : '');
+        inp.setCustomValidity(big.length ? tr('file_too_big', { name: big.join(', ') }) : '');
+    }));
+
+    /* ---------- Maps (Leaflet + markercluster, self-hosted JS; configurable tile server) ---------- */
     const hasLeaflet = () => typeof window.L !== 'undefined';
-    const tileLayer = () => window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    });
+    const tilesMeta = document.querySelector('meta[name="map-tiles"]');
+    const tileLayer = () => {
+        const layer = window.L.tileLayer(tilesMeta?.content || '', { maxZoom: 19, attribution: '' });
+        layer.getAttribution = () => null;   // attribution text is added safely below (no HTML injection)
+        return layer;
+    };
+    const addAttribution = (map) => {
+        const txt = tilesMeta?.dataset.attribution;
+        map.attributionControl.setPrefix(false);
+        if (txt) map.attributionControl.getContainer().append(document.createTextNode(txt));
+    };
     const parseCenter = (s) => (s || '36.1911,44.0092').split(',').map(Number);
 
     // Results map with price pins
@@ -482,6 +533,16 @@
     if (resultsMap && hasLeaflet()) {
         const map = window.L.map(resultsMap, { scrollWheelZoom: true }).setView(parseCenter(resultsMap.dataset.center), 12);
         tileLayer().addTo(map);
+        addAttribution(map);
+        const group = typeof window.L.markerClusterGroup === 'function'
+            ? window.L.markerClusterGroup({
+                showCoverageOnHover: false,
+                maxClusterRadius: 50,
+                // getChildCount() is an integer, so this markup cannot carry user content
+                iconCreateFunction: (c) => window.L.divIcon({ className: 'cluster-pin', html: `<span>${Number(c.getChildCount())}</span>`, iconSize: [44, 44] }),
+            })
+            : window.L.layerGroup();
+        map.addLayer(group);
         fetch(resultsMap.dataset.endpoint, { headers: { Accept: 'application/json' } })
             .then((r) => r.json())
             .then(({ items = [] }) => {
@@ -492,8 +553,9 @@
                 const bounds = [];
                 items.forEach((p) => {
                     const pin = window.L.divIcon({ className: 'price-pin', html: '', iconSize: null });
-                    const m = window.L.marker([p.lat, p.lng], { icon: pin, title: p.title, keyboard: true }).addTo(map);
-                    m.getElement()?.append(el('span', { text: p.short }));
+                    const m = window.L.marker([p.lat, p.lng], { icon: pin, title: p.title, keyboard: true });
+                    m.on('add', () => { const n = m.getElement(); if (n && !n.firstChild) n.append(el('span', { text: p.short })); });
+                    group.addLayer(m);
                     const card = el('a', { class: 'map-card', href: p.url },
                         p.thumb ? el('img', { src: p.thumb, alt: '', width: 220, height: 147 }) : null,
                         el('strong', { class: 'map-card-price', text: p.price }),
@@ -513,6 +575,7 @@
         const pos = [Number(mini.dataset.lat), Number(mini.dataset.lng)];
         const map = window.L.map(mini, { scrollWheelZoom: false, dragging: !matchMedia('(pointer: coarse)').matches }).setView(pos, 15);
         tileLayer().addTo(map);
+        addAttribution(map);
         window.L.marker(pos, { icon: window.L.divIcon({ className: 'dot-pin', iconSize: [22, 22] }), keyboard: false }).addTo(map);
     }
 
@@ -524,10 +587,12 @@
         const start = has ? [Number(lat.value), Number(lng.value)] : parseCenter(picker.dataset.center);
         const map = window.L.map(picker).setView(start, has ? 16 : 12);
         tileLayer().addTo(map);
+        addAttribution(map);
         let marker = null;
         const place = (ll) => {
             if (!marker) {
-                marker = window.L.marker(ll, { draggable: true, icon: window.L.divIcon({ className: 'dot-pin', iconSize: [22, 22] }) }).addTo(map);
+                marker = window.L.marker(ll, { draggable: true, title: picker.getAttribute('aria-label') || '', icon: window.L.divIcon({ className: 'dot-pin', iconSize: [22, 22] }) }).addTo(map);
+                marker.getElement()?.setAttribute('aria-label', picker.getAttribute('aria-label') || 'pin');
                 marker.on('dragend', () => place(marker.getLatLng()));
             }
             marker.setLatLng(ll);

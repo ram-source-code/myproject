@@ -2,7 +2,7 @@
  * Lives in the install folder (e.g. /aqarat/sw.js) so its scope is that folder only. */
 'use strict';
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SCOPE = new URL(self.registration.scope);           // e.g. https://example.com/aqarat/
 const BASE = SCOPE.pathname.replace(/\/$/, '');            // e.g. /aqarat
 const STATIC = `static-${VERSION}`;
@@ -10,7 +10,7 @@ const PAGES = `pages-${VERSION}`;
 const IMAGES = `images-${VERSION}`;
 const OFFLINE_URL = `${BASE}/offline`;
 const PRECACHE = [OFFLINE_URL, `${BASE}/assets/img/icon-192.png`, `${BASE}/assets/img/favicon.svg`];
-const PRIVATE = /\/(dashboard|admin|login|register|logout|push|api|lang)(\/|$)/;
+const PRIVATE = /\/(dashboard|admin|login|register|logout|push|api|lang|install|og)(\/|$)/;
 
 self.addEventListener('install', (event) => {
     event.waitUntil(caches.open(STATIC).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -45,6 +45,9 @@ self.addEventListener('fetch', (event) => {
         })));
         return;
     }
+
+    // Videos stream with HTTP range requests — never intercept them
+    if (rel.startsWith('/uploads/') && !/\.webp$/.test(rel)) return;
 
     // Listing photos: cache-first, bounded
     if (rel.startsWith('/uploads/')) {

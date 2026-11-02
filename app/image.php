@@ -143,9 +143,10 @@ function process_logo_upload(array $file): string
  * @return array{filename:string, thumb:string, width:int, height:int}
  * @throws ImageUploadException
  */
-function process_image_upload(array $file): array
+function process_image_upload(array $file, ?string $watermark = null): array
 {
     $src = load_uploaded_image($file);
+    $phash = image_dhash($src);          // computed on the ORIGINAL so re-uploads of un-watermarked copies still match
     $dir = config('upload_dir');
     if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
         imagedestroy($src);
@@ -154,6 +155,9 @@ function process_image_upload(array $file): array
 
     $base  = bin2hex(random_bytes(16));
     $full  = resize_contain($src, (int) config('image_max_width'), (int) config('image_max_height'));
+    if ($watermark !== null && config('watermark')) {
+        apply_watermark($full, $watermark);
+    }
     $thumb = resize_cover($src, (int) config('thumb_width'), (int) config('thumb_height'));
     imagedestroy($src);
 
@@ -173,7 +177,7 @@ function process_image_upload(array $file): array
         throw new ImageUploadException(t('img_failed'));
     }
 
-    return ['filename' => $fullName, 'thumb' => $thumbName, 'width' => $fw, 'height' => $fh];
+    return ['filename' => $fullName, 'thumb' => $thumbName, 'width' => $fw, 'height' => $fh, 'phash' => $phash];
 }
 
 function fix_orientation(GdImage $img, string $path): GdImage
@@ -241,5 +245,127 @@ function delete_image_files(array $img): void
         if ($name !== '' && preg_match('/^[a-f0-9]{32}(_t)?\.webp$/', $name)) {
             @unlink($dir . '/' . $name);
         }
+    }
+}
+
+/* ───────────── Perceptual hash (dHash) for duplicate-photo detection ───────────── */
+
+/** 64-bit difference hash as 16 hex chars. Robust to resizing, recompression and small edits. */
+function image_dhash(GdImage $img): string
+{
+    $small = imagecreatetruecolor(9, 8);
+    imagecopyresampled($small, $img, 0, 0, 0, 0, 9, 8, imagesx($img), imagesy($img));
+    $bits = '';
+    for ($y = 0; $y < 8; $y++) {
+        $prev = null;
+        for ($x = 0; $x < 9; $x++) {
+            $c = imagecolorat($small, $x, $y);
+            $lum = (($c >> 16) & 0xFF) * 299 + (($c >> 8) & 0xFF) * 587 + ($c & 0xFF) * 114;
+            if ($prev !== null) {
+                $bits .= $lum > $prev ? '1' : '0';
+            }
+            $prev = $lum;
+        }
+    }
+    imagedestroy($small);
+    $hex = '';
+    foreach (str_split($bits, 4) as $nib) {
+        $hex .= dechex(bindec($nib));
+    }
+    return $hex;
+}
+
+function hash_distance(string $a, string $b): int
+{
+    if (strlen($a) !== 16 || strlen($b) !== 16) {
+        return 64;
+    }
+    $d = 0;
+    foreach ([0, 8] as $o) {
+        $x = hexdec(substr($a, $o, 8)) ^ hexdec(substr($b, $o, 8));
+        $d += substr_count(decbin($x), '1');
+    }
+    return $d;
+}
+
+/* ───────────── Watermark: office logo (or site icon) in the corner ───────────── */
+
+function apply_watermark(GdImage $img, string $logoPath): void
+{
+    if (!is_file($logoPath)) {
+        return;
+    }
+    $logo = str_ends_with($logoPath, '.webp') ? @imagecreatefromwebp($logoPath) : @imagecreatefrompng($logoPath);
+    if (!$logo instanceof GdImage) {
+        return;
+    }
+    $w = imagesx($img);
+    $h = imagesy($img);
+    $size = (int) max(40, round(min($w, $h) * 0.11));
+    $mark = new_canvas($size, $size);
+    imagecopyresampled($mark, $logo, 0, 0, 0, 0, $size, $size, imagesx($logo), imagesy($logo));
+    imagedestroy($logo);
+    // 70 % opacity: scale every pixel's alpha
+    for ($y = 0; $y < $size; $y++) {
+        for ($x = 0; $x < $size; $x++) {
+            $c = imagecolorat($mark, $x, $y);
+            $a = ($c >> 24) & 0x7F;
+            $na = (int) (127 - (127 - $a) * 0.7);
+            imagesetpixel($mark, $x, $y, ($na << 24) | ($c & 0xFFFFFF));
+        }
+    }
+    $pad = (int) round($size * 0.25);
+    $x = $w - $size - $pad;
+    $y = $h - $size - $pad;
+    imagealphablending($img, true);
+    // soft white plate behind the logo for legibility on dark photos
+    $plate = imagecolorallocatealpha($img, 255, 255, 255, 95);
+    imagefilledellipse($img, $x + intdiv($size, 2), $y + intdiv($size, 2), (int) ($size * 1.25), (int) ($size * 1.25), $plate);
+    imagecopy($img, $mark, $x, $y, 0, 0, $size, $size);
+    imagedestroy($mark);
+}
+
+/* ───────────── Videos (stored as uploaded; validated by MIME and container magic bytes) ───────────── */
+
+const ALLOWED_VIDEO_MIME = ['video/mp4' => 'mp4', 'video/quicktime' => 'mov', 'video/webm' => 'webm'];
+
+/** @return array{filename:string, mime:string, size:int} */
+function process_video_upload(array $file): array
+{
+    $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    $mb = (int) (config('max_video_bytes') / 1048576);
+    if ($err !== UPLOAD_ERR_OK) {
+        throw new ImageUploadException(in_array($err, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) ? t('video_too_large', ['mb' => $mb]) : t('img_failed'));
+    }
+    $tmp = (string) $file['tmp_name'];
+    if (!is_uploaded_file($tmp) && !defined('AQARAT_CLI')) {
+        throw new ImageUploadException(t('img_failed'));
+    }
+    $size = (int) filesize($tmp);
+    if ($size <= 0 || $size > config('max_video_bytes')) {
+        throw new ImageUploadException(t('video_too_large', ['mb' => $mb]));
+    }
+    $mime = (string) (new finfo(FILEINFO_MIME_TYPE))->file($tmp);
+    $head = (string) file_get_contents($tmp, false, null, 0, 16);
+    $isIsoBmff = substr($head, 4, 4) === 'ftyp';                 // MP4 / MOV
+    $isWebm = str_starts_with($head, "\x1A\x45\xDF\xA3");      // EBML (WebM/Matroska)
+    if (!isset(ALLOWED_VIDEO_MIME[$mime]) || ($mime === 'video/webm' ? !$isWebm : !$isIsoBmff)) {
+        throw new ImageUploadException(t('video_bad_type'));
+    }
+    $dir = ensure_upload_dir();
+    $name = bin2hex(random_bytes(16)) . '.' . ALLOWED_VIDEO_MIME[$mime];
+    $ok = defined('AQARAT_CLI') ? copy($tmp, $dir . '/' . $name) : move_uploaded_file($tmp, $dir . '/' . $name);
+    if (!$ok) {
+        throw new ImageUploadException(t('img_failed'));
+    }
+    @chmod($dir . '/' . $name, 0644);
+    return ['filename' => $name, 'mime' => $mime, 'size' => $size];
+}
+
+function delete_video_file(array $v): void
+{
+    $name = basename((string) ($v['filename'] ?? ''));
+    if (preg_match('/^[a-f0-9]{32}\.(mp4|mov|webm)$/', $name)) {
+        @unlink(config('upload_dir') . '/' . $name);
     }
 }

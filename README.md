@@ -16,7 +16,9 @@ Languages: **کوردی (Sorani, default)**, العربية and English — RTL/
 | Quick-filter chips, list/map toggle, recently viewed | **Notify followers** with a push notification (5/day limit) | **Broadcast** to everyone who enabled announcements |
 | **Follow an office with one tap — no account needed** | Followers are notified automatically when a listing goes live | Notification log with delivery counts |
 | WhatsApp & call buttons, sticky contact bar on mobile | Enquiries inbox | Database mode / stats overview |
-| Install as an app, works offline for pages already visited | | |
+| Install as an app, works offline for pages already visited | Photos are **watermarked with the office logo** automatically | **Reports** queue + automatic **duplicate-photo detection** |
+| **Saved-search alerts**: "notify me" for any filter combination | Upload **videos** recorded on the phone (MP4/WebM/MOV) | |
+| Report a listing (sold, wrong price, fake, duplicate…) | | |
 
 ## Install in a sub-folder (e.g. `public_html/aqarat/` → `example.com/aqarat/`)
 
@@ -61,10 +63,47 @@ and on `localhost`).
 - iPhone/iPad: notifications work when the site is **added to the Home Screen** (iOS 16.4+); the site
   shows this hint automatically.
 
+## Self-contained by design
+Everything is served from your own folder: **fonts are self-hosted** (Noto Sans Arabic for Kurdish/Arabic,
+Inter for Latin — SIL Open Font License, see `assets/fonts/`), Leaflet and markercluster are vendored in
+`assets/vendor/`, videos and photos live in `uploads/`. The Content-Security-Policy only allows `'self'`.
+
+The **one exception is map tiles** (the map background images). Self-hosting street-level tiles for
+Kurdistan would take hundreds of MB and the OpenStreetMap tile policy forbids bulk downloads, so tiles come
+from `tile.openstreetmap.org` by default. Set `AQARAT_TILE_URL` to your own tile server, or to an empty string
+to switch maps off completely (list view, listing pages and forms keep working; the CSP then allows nothing
+external at all).
+
+## Saved searches, reports and duplicates
+- **Saved-search alerts:** on any results page, "Alert me" stores the current filters for this device
+  (up to 10). When a listing is published, every matching device gets one push — devices that already got the
+  office-follower push for the same listing are skipped. Managed from the Notifications page.
+- **Reports:** visitors can report a listing (sold, wrong price, fake, duplicate, wrong location, offensive,
+  other). One report per IP per listing, 5 per hour. Admins keep or unpublish from *Admin → Reports*.
+- **Duplicate detection:** every photo gets a 64-bit perceptual hash (dHash, computed with GD on the
+  original before watermarking). A new photo within Hamming distance 4 of a photo on another listing — even
+  resized or re-compressed — or a listing with the same location, type and price (±5 %) is flagged for the
+  admin.
+
+## Videos
+MP4, WebM or MOV (as recorded by phones), up to 2 per listing and 60 MB each. Files are validated by MIME
+type **and** container magic bytes, stored under random names and streamed by your web server (Apache/nginx
+handle the range requests video players need). No ffmpeg or transcoding required. Raise
+`upload_max_filesize` / `post_max_size` as in `deploy/php.ini`.
+
+## SEO and sharing
+Readable listing URLs (`/property/123-خانووی-٤-ژوور-لە-عەنکاوە`, old links 301-redirect), canonical and
+`hreflang` tags (`?lang=ckb|ar|en`), `RealEstateListing` JSON-LD, Open Graph/Twitter tags, city landing pages
+(`/city/erbil`), `sitemap.xml`, and an auto-generated **1200×630 share image** per listing (photo, price,
+rooms, area, office logo) so links look good in WhatsApp, Telegram and Facebook.
+For a sub-folder install, add `Sitemap: https://example.com/aqarat/sitemap.xml` to the robots.txt at your
+domain root (crawlers only read robots.txt there). Set `AQARAT_APP_URL` so shared links use your real domain.
+
 ## Images (`app/image.php`)
 MIME sniffed with `finfo` + `getimagesize`, dimension and pixel limits checked before decoding, EXIF
 orientation fixed, resized (1600×1200 max + 640×427 thumbnail; logos 256×256), **re-encoded to WebP**
-(strips metadata/GPS and any embedded payload), saved under random names.
+(strips metadata/GPS and any embedded payload), watermarked with the office logo (`AQARAT_WATERMARK=0` to
+disable), saved under random names.
 
 ## Database (`app/db.php`)
 `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`; versioned migrations
@@ -73,7 +112,8 @@ via `PRAGMA user_version`; FTS5 full-text search over title, description, distri
 ## Configuration (environment variables)
 `AQARAT_APP_URL`, `AQARAT_LANG` (ckb/ar/en), `AQARAT_IQD_PER_USD` (default 1450, used to compare IQD
 prices), `AQARAT_PUSH_SUBJECT` (mailto: contact for push services), `AQARAT_REQUIRE_APPROVAL`,
-`AQARAT_DEBUG`, `AQARAT_DB_PATH`. See `app/config.php`.
+`AQARAT_DEBUG`, `AQARAT_DB_PATH`, `AQARAT_TILE_URL`, `AQARAT_TILE_ATTRIBUTION`, `AQARAT_WATERMARK`.
+See `app/config.php`.
 
 ## Tests
 - `php tests/push_test.php` — Web Push crypto: encrypt/decrypt round-trip, VAPID signature, SSRF guard.
@@ -90,6 +130,8 @@ assets/          css, js, img (PWA icons), vendor/leaflet
 uploads/         WebP images (generated)
 data/            SQLite database + VAPID keys (generated, protected)
 bin/             seed.php, make-icons.php
+app/fonts/       TTF fonts used by GD for share images (not web-served)
+assets/fonts/    self-hosted web fonts (WOFF2)
 deploy/          nginx + php.ini samples
 tests/           push_test.php, e2e.py
 ```

@@ -2,7 +2,7 @@
 /** @var array $p  @var bool $priority */
 $favs = favorite_ids();
 $isFav = in_array((int) $p['id'], $favs, true);
-$href = url('property/' . $p['id']);
+$href = property_url($p);
 $headingTag = $headingTag ?? 'h3';
 ?>
 <article class="card property-card">

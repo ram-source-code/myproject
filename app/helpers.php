@@ -13,11 +13,21 @@ function config(string $key, $default = null)
 const SUPPORTED_LANGS = ['ckb', 'ar', 'en'];
 const LANG_NAMES = ['ckb' => 'کوردی', 'ar' => 'العربية', 'en' => 'English'];
 
+/** Language forced via ?lang= (used by hreflang alternates so crawlers can index every language). */
+function forced_lang(): ?string
+{
+    $l = $_GET['lang'] ?? null;
+    return is_string($l) && in_array($l, SUPPORTED_LANGS, true) ? $l : null;
+}
+
 function lang(): string
 {
     static $lang = null;
     if ($lang !== null) {
         return $lang;
+    }
+    if (forced_lang() !== null) {
+        return $lang = forced_lang();
     }
     $c = $_COOKIE['lang'] ?? '';
     $lang = in_array($c, SUPPORTED_LANGS, true) ? $c : config('default_lang', 'ar');
@@ -44,6 +54,11 @@ function t(string $key, array $replace = []): string
         $s = str_replace(':' . $k, (string) $v, $s);
     }
     return $s;
+}
+
+function maps_enabled(): bool
+{
+    return (string) config('tile_url') !== '';
 }
 
 function app_name(): string
@@ -102,7 +117,42 @@ function current_path(): string
 function url(string $path = '/', array $query = []): string
 {
     $q = array_filter($query, static fn($v) => $v !== null && $v !== '' && $v !== []);
+    if (forced_lang() !== null && !str_starts_with($path, 'lang/') && !isset($q['lang'])) {
+        $q['lang'] = forced_lang();
+    }
     return base_path() . '/' . ltrim($path, '/') . ($q ? '?' . http_build_query($q) : '');
+}
+
+/** URL-safe slug that keeps Kurdish/Arabic letters (browsers and Google handle Unicode paths). */
+function slugify(string $s, int $max = 60): string
+{
+    $s = mb_strtolower(trim($s));
+    $s = (string) preg_replace('/[^\p{L}\p{N}]+/u', '-', $s);
+    $s = trim(mb_substr(trim($s, '-'), 0, $max), '-');
+    return $s;
+}
+
+function property_url(array $p, bool $absolute = false): string
+{
+    $slug = slugify((string) ($p['title'] ?? ''));
+    $path = 'property/' . (int) $p['id'] . ($slug !== '' ? '-' . $slug : '');
+    $u = base_path() . '/' . implode('/', array_map('rawurlencode', explode('/', $path)));
+    $u = str_replace('%2F', '/', $u);
+    if (forced_lang() !== null) {
+        $u .= '?lang=' . forced_lang();
+    }
+    return $absolute ? absolute_origin() . $u : $u;
+}
+
+function absolute_origin(): string
+{
+    $cfg = (string) config('app_url');
+    if (preg_match('~^(https?://[^/]+)~', $cfg, $m)) {
+        return $m[1];
+    }
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    return ($https ? 'https' : 'http') . '://' . $host;
 }
 
 function asset(string $path): string

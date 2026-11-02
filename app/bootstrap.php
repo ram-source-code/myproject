@@ -44,7 +44,9 @@ set_error_handler(static function (int $no, string $str, string $file, int $line
 
 if (PHP_SAPI !== 'cli') {
     header_remove('X-Powered-By');
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    $tileOrigin = maps_enabled() ? (string) preg_replace('~^(https?://[^/]+).*$~', '$1', (string) config('tile_url')) : '';
+    $tileOrigin = preg_match('~^https?://[A-Za-z0-9.\-:{}]+$~', $tileOrigin) ? ' ' . str_replace(['{s}.', '{s}'], ['*.', '*'], $tileOrigin) : '';
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:{$tileOrigin}; media-src 'self' blob:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');

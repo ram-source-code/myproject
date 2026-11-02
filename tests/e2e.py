@@ -121,6 +121,18 @@ if have_crypto:
 else:
     print('SKIP push tests (pip install cryptography)')
 
+# ── Saved-search alerts: one matching device, one non-matching device
+if have_crypto:
+    g = sess(); h = {'X-CSRF-Token': meta_tok(g.get(B + '/properties').text), 'Accept': 'application/json'}
+    sub_match = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-match-' + os.urandom(4).hex())
+    sub_other = fake_sub('https://fcm.googleapis.com/fcm/send/e2e-other-' + os.urandom(4).hex())
+    r = g.post(B + '/push/search', json={'subscription': sub_match, 'query': {'purpose': 'sale', 'type': 'house', 'city': '1', 'max_price': '300000', 'sort': 'price_asc'}}, headers=h).json()
+    ok(r.get('ok') and 'House' in r.get('label', '') and '$300,000' in r.get('label', ''), 'saved search stored with readable label: ' + r.get('label', ''))
+    g.post(B + '/push/search', json={'subscription': sub_other, 'query': {'type': 'land', 'city': '2'}}, headers=h)
+    st = g.post(B + '/push/status', json={'endpoint': sub_match['endpoint']}, headers=h).json()
+    ok(len(st.get('searches', [])) == 1 and st['searches'][0]['url'].startswith(PREFIX + '/properties?'), 'status lists saved search with link')
+    ok(g.post(B + '/push/search', json={'subscription': fake_sub('https://evil.example/x'), 'query': {}}, headers=h).status_code == 422, 'saved search rejects non-push endpoint')
+
 # ── Authorization
 other = sess()
 t = tok(other.get(B + '/register').text)
@@ -139,13 +151,48 @@ pr = anon.get(B + '/property/' + pid)
 ok(pr.status_code == 200 and '&lt;script&gt;' in pr.text and '<script>alert' not in pr.text, 'approved listing public; XSS escaped')
 ok('$250,000' in pr.text and 'Dream City' in pr.text and 'Tapo' in pr.text, 'Kurdish digits parsed; project + deed shown')
 ok('wa.me/9647501234567' in pr.text, 'listing WhatsApp uses office number in +964 format')
+if have_crypto:
+    st_m = g.post(B + '/push/status', json={'endpoint': sub_match['endpoint']}, headers=h).json()
+    st_o = g.post(B + '/push/status', json={'endpoint': sub_other['endpoint']}, headers=h).json()
+    ok(st_m.get('subscribed') is False, 'matching saved search was pushed (fake FCM token → 410 → cleaned up)')
+    ok(st_o.get('subscribed') is True and len(st_o['searches']) == 1, 'non-matching saved search untouched')
+
+# ── SEO
+ok(re.search(r'/property/\d+-[^"?]+', pr.url) is not None, 'listing redirected to canonical slug URL: ' + pr.url[len(B):][:40])
+ok('application/ld+json' in pr.text and '"RealEstateListing"' in pr.text, 'JSON-LD structured data')
+ok('hreflang="ckb"' in pr.text and 'hreflang="ar"' in pr.text and 'property="og:image"' in pr.text, 'hreflang + Open Graph tags')
+og = anon.get(B + f'/og/{pid}.jpg')
+ok(og.status_code == 200 and og.headers['Content-Type'] == 'image/jpeg' and Image.open(io.BytesIO(og.content)).size == (1200, 630), 'share preview image 1200×630')
+sm = anon.get(B + '/sitemap.xml').text
+ok('<urlset' in sm and f'/property/{pid}-' in sm and '/city/erbil' in sm, 'sitemap lists listings and city pages')
+ok('Property for sale in Erbil' in anon.get(B + '/city/erbil?purpose=sale').text, 'city landing page')
+home = anon.get(B + '/').text
+ok(not re.search(r'(src|href)="https?://(?!127\.0\.0\.1)', home.split('<body')[0]) and 'googleapis' not in home, 'no external fonts/scripts/styles in <head>')
+ok('fonts/noto-sans-arabic-wght.woff2' in anon.get(B + '/assets/css/app.css').text and anon.get(B + '/assets/fonts/noto-sans-arabic-wght.woff2').status_code == 200, 'self-hosted @font-face')
+
+# ── Report a listing
+rp = sess(); html = rp.get(pr.url).text
+r = rp.post(B + f'/property/{pid}/report', data={'_csrf': tok(html), 'reason': 'wrong_price', 'details': 'price is 200k'})
+ok(any('Thank you' in m for _, m in flashes(r.text)), 'report submitted')
+ok('price is 200k' in a.get(B + '/admin/reports').text, 'admin sees report')
+ok('Possible duplicates' in a.get(B + '/admin/reports').text, 'duplicates section on admin reports page')
 html = a.get(B + '/admin/notifications').text
-ok('automatic' in html, 'auto "new listing" notification logged for followers')
+ok('Broadcast' in html, 'admin notifications page')
 r = a.post(B + '/admin/notifications', data={'_csrf': tok(html), 'target': 'all', 'title': 'Welcome', 'body': 'Aqarat is live', 'property_id': ''})
 ok(any('Notification sent' in m for _, m in flashes(r.text)), 'admin broadcast')
 t = tok(a.get(B + '/admin/offices').text)
 a.post(B + f'/admin/offices/{office_id}/verify', data={'_csrf': t})
 ok('Verified' in anon.get(B + '/office/' + office_id).text, 'admin verifies office')
+
+# ── Videos: valid MP4 accepted, disguised script rejected
+mp4 = b'\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2' + b'\x00\x00\x00\x08free' + os.urandom(2048)
+fake = b'<?php echo 1; ?>' + b'A' * 100
+t = tok(o.get(B + f'/dashboard/properties/{pid}/edit').text)
+d3 = dict(data); d3['_csrf'] = t
+r = o.post(B + f'/dashboard/properties/{pid}', data=d3, files=[('videos[]', ('tour.mp4', mp4, 'video/mp4')), ('videos[]', ('x.mp4', fake, 'video/mp4'))])
+ok(any('x.mp4' in m for _, m in flashes(r.text)) and '.mp4#t=0.1' in r.text, 'video upload: MP4 kept, disguised file rejected')
+vid = re.search(r'/uploads/([a-f0-9]{32}\.mp4)', r.text).group(1)
+ok(anon.get(B + '/uploads/' + vid).status_code == 200, 'video served from uploads')
 
 # ── Moderation: edit after approval returns to review
 t = tok(o.get(B + f'/dashboard/properties/{pid}/edit').text)

@@ -19,7 +19,7 @@ $errs = errors();
             <?php if ($isEdit): ?>
                 <div class="head-actions">
                     <span class="status status-<?= e($p['status']) ?>"><?= e(t('status_' . $p['status'])) ?></span>
-                    <a class="btn btn-outline btn-sm" href="<?= e(url('property/' . $p['id'])) ?>"><svg aria-hidden="true"><use href="#i-eye"></use></svg><?= e(t('preview')) ?></a>
+                    <a class="btn btn-outline btn-sm" href="<?= e(property_url($p)) ?>"><svg aria-hidden="true"><use href="#i-eye"></use></svg><?= e(t('preview')) ?></a>
                 </div>
             <?php endif; ?>
         </div>
@@ -36,7 +36,6 @@ $errs = errors();
 
         <form method="post" action="<?= e($action) ?>" enctype="multipart/form-data" class="listing-form" novalidate data-validate>
             <?= csrf_field() ?>
-            <input type="hidden" name="MAX_FILE_SIZE" value="<?= (int) config('max_upload_bytes') ?>">
 
             <section class="panel" aria-labelledby="sec-basic">
                 <h2 id="sec-basic" class="panel-title"><?= e(t('basic_info')) ?></h2>
@@ -216,13 +215,36 @@ $errs = errors();
                         <strong><?= e(t('choose_photos')) ?></strong>
                         <span class="muted"><?= e(t('or_drag')) ?></span>
                     </label>
-                    <input id="f-images" type="file" name="images[]" multiple accept="image/jpeg,image/png,image/webp,image/gif"
+                    <input id="f-images" type="file" name="images[]" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/*"
                            data-max-bytes="<?= (int) config('max_upload_bytes') ?>" data-max-files="<?= (int) config('max_images') - count($images) ?>"
                            aria-describedby="upload-status"<?= field_aria('images') ?>>
                     <?= field_error('images') ?>
                 </div>
                 <p id="upload-status" class="hint" aria-live="polite"></p>
                 <ul class="upload-preview" data-preview></ul>
+            </section>
+
+            <section class="panel" aria-labelledby="sec-videos" id="videos">
+                <h2 id="sec-videos" class="panel-title"><?= e(t('videos')) ?></h2>
+                <p class="hint"><?= e(t('video_hint', ['n' => config('max_videos'), 'mb' => (int) (config('max_video_bytes') / 1048576)])) ?></p>
+                <?php if (!empty($videos)): ?>
+                    <ul class="video-manager">
+                        <?php foreach ($videos as $i => $vid): ?>
+                            <li>
+                                <video controls playsinline preload="metadata" src="<?= e(upload_url($vid['filename'])) ?>#t=0.1" aria-label="<?= e(t('video_n', ['n' => $i + 1])) ?>"></video>
+                                <button class="btn btn-light btn-sm text-danger" type="submit" form="delvid-<?= (int) $vid['id'] ?>"><svg aria-hidden="true"><use href="#i-trash"></use></svg><?= e(t('delete')) ?><span class="visually-hidden"> <?= e(t('video_n', ['n' => $i + 1])) ?></span></button>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+                <?php if (count($videos ?? []) < (int) config('max_videos')): ?>
+                    <div class="field">
+                        <label for="f-videos"><?= e(t('choose_videos')) ?></label>
+                        <input id="f-videos" type="file" name="videos[]" multiple accept="video/mp4,video/webm,video/quicktime"
+                               data-max-bytes="<?= (int) config('max_video_bytes') ?>" data-video-input>
+                        <p class="hint" data-video-status aria-live="polite"></p>
+                    </div>
+                <?php endif; ?>
             </section>
 
             <div class="form-footer">
@@ -234,6 +256,9 @@ $errs = errors();
         <?php foreach ($images as $img): ?>
             <form id="cover-<?= (int) $img['id'] ?>" method="post" action="<?= e(url('dashboard/images/' . $img['id'] . '/cover')) ?>" hidden><?= csrf_field() ?></form>
             <form id="delimg-<?= (int) $img['id'] ?>" method="post" action="<?= e(url('dashboard/images/' . $img['id'] . '/delete')) ?>" hidden data-confirm="<?= e(t('confirm_delete_photo')) ?>"><?= csrf_field() ?></form>
+        <?php endforeach; ?>
+        <?php foreach ($videos ?? [] as $vid): ?>
+            <form id="delvid-<?= (int) $vid['id'] ?>" method="post" action="<?= e(url('dashboard/videos/' . $vid['id'] . '/delete')) ?>" hidden data-confirm="<?= e(t('confirm_delete_video')) ?>"><?= csrf_field() ?></form>
         <?php endforeach; ?>
 
         <?php if ($isEdit): ?>

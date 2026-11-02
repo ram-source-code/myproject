@@ -15,6 +15,39 @@ $useMap = $useMap ?? false;
     <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
     <title><?= e($pageTitle ?? app_name()) ?></title>
     <meta name="description" content="<?= e($metaDesc ?? t('meta_description')) ?>">
+<?php
+    $q = $_GET; unset($q['lang']);
+    $canonical = $seo['canonical'] ?? absolute_origin() . base_path() . current_path() . ($q ? '?' . http_build_query($q) : '');
+    $og = ($seo['og'] ?? []) + [
+        'type' => 'website', 'title' => $pageTitle ?? app_name(), 'description' => $metaDesc ?? t('meta_description'),
+        'image' => absolute_origin() . asset('img/icon-512.png'), 'url' => $canonical,
+    ];
+    $ogLocale = ['ckb' => 'ckb_IQ', 'ar' => 'ar_IQ', 'en' => 'en_US'][lang()];
+?>
+    <link rel="canonical" href="<?= e($canonical) ?>">
+    <?php foreach (seo_alternates() as $hl => $href): ?>
+        <link rel="alternate" hreflang="<?= e($hl) ?>" href="<?= e($href) ?>">
+    <?php endforeach; ?>
+    <meta property="og:site_name" content="<?= e(app_name()) ?>">
+    <meta property="og:locale" content="<?= e($ogLocale) ?>">
+    <meta property="og:type" content="<?= e($og['type']) ?>">
+    <meta property="og:title" content="<?= e($og['title']) ?>">
+    <meta property="og:description" content="<?= e($og['description']) ?>">
+    <meta property="og:url" content="<?= e($og['url']) ?>">
+    <meta property="og:image" content="<?= e($og['image']) ?>">
+    <?php if (!empty($og['image_width'])): ?>
+        <meta property="og:image:width" content="<?= (int) $og['image_width'] ?>">
+        <meta property="og:image:height" content="<?= (int) $og['image_height'] ?>">
+    <?php endif; ?>
+    <meta name="twitter:card" content="<?= !empty($seo['og']) ? 'summary_large_image' : 'summary' ?>">
+    <?php if (!empty($seo['jsonld'])): ?>
+        <script type="application/ld+json"><?= jsonld($seo['jsonld']) ?></script>
+    <?php elseif (current_path() === '/'): ?>
+        <script type="application/ld+json"><?= jsonld([
+            '@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => app_name(), 'url' => absolute_origin() . url('/'),
+            'potentialAction' => ['@type' => 'SearchAction', 'target' => absolute_origin() . base_path() . '/properties?q={search_term_string}', 'query-input' => 'required name=search_term_string'],
+        ]) ?></script>
+    <?php endif; ?>
     <meta name="app-base" content="<?= e(base_path()) ?>">
     <meta name="vapid-key" content="<?= e(vapid_keys()['public']) ?>">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
@@ -25,12 +58,18 @@ $useMap = $useMap ?? false;
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="<?= e(app_name()) ?>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap">
-    <?php if ($useMap): ?><link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>"><?php endif; ?>
+    <link rel="preload" href="<?= e(asset('fonts/' . (lang() === 'en' ? 'inter-latin-wght.woff2' : 'noto-sans-arabic-wght.woff2'))) ?>" as="font" type="font/woff2" crossorigin>
+    <?php $useMap = $useMap && maps_enabled(); ?>
+    <?php if ($useMap): ?>
+        <link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>">
+        <link rel="stylesheet" href="<?= e(asset('vendor/markercluster/MarkerCluster.css')) ?>">
+    <?php endif; ?>
     <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
-    <?php if ($useMap): ?><script src="<?= e(asset('vendor/leaflet/leaflet.js')) ?>" defer></script><?php endif; ?>
+    <?php if ($useMap): ?>
+        <script src="<?= e(asset('vendor/leaflet/leaflet.js')) ?>" defer></script>
+        <script src="<?= e(asset('vendor/markercluster/leaflet.markercluster.js')) ?>" defer></script>
+        <meta name="map-tiles" content="<?= e(config('tile_url')) ?>" data-attribution="<?= e(config('tile_attribution')) ?>">
+    <?php endif; ?>
     <script src="<?= e(asset('js/app.js')) ?>" defer></script>
 </head>
 <body class="<?= $user ? 'is-auth' : 'is-guest' ?>">
@@ -44,6 +83,7 @@ $useMap = $useMap ?? false;
     'unfollowed_toast' => t('unfollowed_toast'), 'news_on' => t('news_on'), 'news_off' => t('news_off'),
     'no_follows' => t('no_follows'), 'no_feed' => t('no_feed'), 'unfollow' => t('unfollow'),
     'view' => t('view'), 'beds_short' => t('beds_short'), 'sqm' => t('sqm'), 'map_empty' => t('map_empty'),
+    'alert_on' => t('alert_on'), 'delete' => t('delete'), 'no_searches' => t('no_searches'),
     'recently_viewed' => t('recently_viewed'), 'clear' => t('reset'), 'offline_now' => t('offline_now'), 'online_now' => t('online_now'),
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <a class="skip-link" href="#main"><?= e(t('skip_to_content')) ?></a>

@@ -11,6 +11,12 @@ RemoveType .php .phtml .phar
 <FilesMatch "(?i)\.(php\d?|phtml|phar|pl|py|cgi|sh|html?|svg|js)$">
     Require all denied
 </FilesMatch>
+<IfModule mod_mime.c>
+    AddType image/webp .webp
+    AddType video/mp4 .mp4
+    AddType video/webm .webm
+    AddType video/quicktime .mov
+</IfModule>
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"

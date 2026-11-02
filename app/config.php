@@ -20,6 +20,15 @@ return [
     // Listings can be priced in USD or IQD; IQD prices are converted for filtering/sorting.
     'iqd_per_usd'     => (int) $env('IQD_PER_USD', 1450),
     'map_center'      => [36.1911, 44.0092],          // Erbil
+    // Map tiles are the ONLY external resource. Point this at your own tile server, or set it
+    // to an empty string to switch maps off completely (AQARAT_TILE_URL="").
+    'tile_url'        => $env('TILE_URL', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+    'tile_attribution'=> $env('TILE_ATTRIBUTION', '© OpenStreetMap'),
+    // Videos (stored as uploaded — no transcoding needed)
+    'max_video_bytes' => 60 * 1024 * 1024,
+    'max_videos'      => 2,
+    'watermark'       => filter_var($env('WATERMARK', '1'), FILTER_VALIDATE_BOOLEAN),
+    'saved_search_limit' => 10,
     // Web Push (VAPID). Keys are generated automatically into data/vapid.json on first use.
     'push_subject'    => $env('PUSH_SUBJECT', 'mailto:admin@example.com'),
     'vapid_file'      => $env('VAPID_FILE', dirname(__DIR__) . '/data/vapid.json'),

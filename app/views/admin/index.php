@@ -9,6 +9,8 @@
             <div><dt><?= e(t('status_pending')) ?></dt><dd><a href="<?= e(url('admin/properties', ['status' => 'pending'])) ?>"><?= number_format((int) $stats['pending']) ?></a></dd></div>
             <div><dt><?= e(t('inquiries')) ?></dt><dd><?= number_format((int) $stats['inquiries']) ?></dd></div>
             <div><dt><?= e(t('views')) ?></dt><dd><?= number_format((int) $stats['views']) ?></dd></div>
+            <div><dt><?= e(t('reported_listings')) ?></dt><dd><a href="<?= e(url('admin/reports')) ?>"><?= (int) $stats['reported'] ?></a></dd></div>
+            <div><dt><?= e(t('possible_duplicates')) ?></dt><dd><a href="<?= e(url('admin/reports') . '#dups') ?>"><?= (int) $stats['dups'] ?></a></dd></div>
         </dl>
 
         <div class="grid-2 align-start">
@@ -19,7 +21,7 @@
                         <?php foreach ($pending as $p): ?>
                             <li>
                                 <div>
-                                    <a href="<?= e(url('property/' . $p['id'])) ?>"><?= e($p['title']) ?></a>
+                                    <a href="<?= e(property_url($p)) ?>"><?= e($p['title']) ?></a>
                                     <p class="muted small"><?= e($p['owner_name']) ?> · <?= e(price_label($p)) ?></p>
                                 </div>
                                 <div class="row-actions">

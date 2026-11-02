@@ -255,3 +255,42 @@ foreach ($plan as $i => $cityEn) {
     $n++;
 }
 echo "demo listings: $n\n";
+
+// ---- Demo: a "stolen photo" listing (resized + recompressed copy of listing #1's cover) → duplicate detection
+$src = $pdo->query('SELECT filename FROM property_images WHERE property_id = 1 ORDER BY sort_order LIMIT 1')->fetchColumn();
+if ($src) {
+    $im = imagecreatefromwebp(config('upload_dir') . '/' . $src);
+    $copy = imagescale($im, 1100);
+    $tmp = tempnam(sys_get_temp_dir(), 'aqdup') . '.jpg';
+    imagejpeg($copy, $tmp, 70);
+    $owner = $officeUsers['Sulaymaniyah'][0] ?? $adminId;
+    $pdo->prepare("INSERT INTO properties (user_id, city_id, title, description, purpose, type, district, price, currency, price_usd, area, bedrooms, bathrooms, status)
+        VALUES (?,?,?,?, 'sale', 'house', 'ڕاستی', 355000, 'USD', 355000, 290, 4, 3, 'pending')")
+        ->execute([$owner, $cityId('Erbil'), 'خانووی ٤ ژوور — نرخی تایبەت', 'کۆپی وێنە بۆ تاقیکردنەوەی دۆزینەوەی دووبارە.']);
+    $dupId = (int) $pdo->lastInsertId();
+    attach_uploaded_images($dupId, [['name' => 'copy.jpg', 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => filesize($tmp), 'type' => 'image/jpeg']]);
+    @unlink($tmp);
+    @unlink(substr($tmp, 0, -4));
+    echo 'duplicate flags: ' . $pdo->query('SELECT COUNT(*) FROM duplicate_flags')->fetchColumn() . PHP_EOL;
+}
+
+// ---- Demo videos (only if ffmpeg is available on this machine; the app itself never needs ffmpeg)
+$ffmpeg = trim((string) shell_exec('command -v ffmpeg 2>/dev/null'));
+if ($ffmpeg !== '') {
+    foreach ([1, 4] as $pid) {
+        $img = $pdo->query('SELECT filename FROM property_images WHERE property_id = ' . $pid . ' ORDER BY sort_order LIMIT 1')->fetchColumn();
+        if (!$img) { continue; }
+        $png = tempnam(sys_get_temp_dir(), 'aqv') . '.png';
+        imagepng(imagecreatefromwebp(config('upload_dir') . '/' . $img), $png);
+        $mp4 = tempnam(sys_get_temp_dir(), 'aqv') . '.mp4';
+        // 6-second slow zoom ("Ken Burns") tour, H.264 + faststart so it streams immediately
+        shell_exec(escapeshellarg($ffmpeg) . ' -y -loglevel error -loop 1 -i ' . escapeshellarg($png)
+            . " -vf \"scale=1600:-2,zoompan=z='min(zoom+0.0015,1.25)':d=150:s=1280x720:fps=25,format=yuv420p\" -t 6 -c:v libx264 -preset veryfast -crf 28 -movflags +faststart "
+            . escapeshellarg($mp4) . ' 2>&1');
+        if (is_file($mp4) && filesize($mp4) > 0) {
+            $errs = attach_uploaded_videos($pid, [['name' => 'tour.mp4', 'tmp_name' => $mp4, 'error' => UPLOAD_ERR_OK, 'size' => filesize($mp4), 'type' => 'video/mp4']]);
+            echo "demo video for #$pid" . ($errs ? ': ' . implode('; ', $errs) : '') . PHP_EOL;
+        }
+        @unlink($png); @unlink($mp4); @unlink(substr($png, 0, -4)); @unlink(substr($mp4, 0, -4));
+    }
+}

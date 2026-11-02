@@ -19,7 +19,7 @@
     <ul class="city-tiles">
         <?php foreach ($topCities as $i => $c): ?>
             <li>
-                <a class="city-tile city-tile-<?= $i % 6 ?>" href="<?= e(url('properties', ['city' => $c['id']])) ?>">
+                <a class="city-tile city-tile-<?= $i % 6 ?>" href="<?= e(url('city/' . $c['slug'])) ?>">
                     <span class="city-name"><?= e(city_name($c)) ?></span>
                     <span class="city-count"><?= e(t('n_listings', ['n' => (int) $c['n']])) ?></span>
                 </a>

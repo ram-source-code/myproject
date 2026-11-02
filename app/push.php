@@ -341,29 +341,140 @@ function absolute_base_url(): string
     return ($https ? 'https' : 'http') . '://' . $host . base_path();
 }
 
-/** Notify an office's followers when one of its listings goes live (once per listing). */
-function notify_new_listing(array $p): void
+/**
+ * A listing just went live: notify (once per listing)
+ *   1. the followers of its office, and
+ *   2. every device whose saved search matches it (skipping devices already notified in step 1).
+ */
+function notify_listing_published(array $p): void
 {
-    if (empty($p['office_id'])) {
-        return;
-    }
     $stmt = db()->prepare("SELECT 1 FROM notifications WHERE property_id = ? AND kind = 'auto'");
     $stmt->execute([$p['id']]);
     if ($stmt->fetchColumn()) {
         return;
     }
     try {
-        send_notification(
-            (int) $p['user_id'], (int) $p['office_id'], 'followers',
-            $p['office_name'] . ' · ' . t('push_new_listing'),
-            $p['title'] . ' — ' . price_label($p),
-            '/property/' . (int) $p['id'],
-            (int) $p['id'],
-            $p['office_logo'] ? '/uploads/' . $p['office_logo'] : null,
-            $p['cover_thumb'] ? '/uploads/' . $p['cover_thumb'] : null,
-            'auto',
-        );
+        $notified = [];
+        $icon = $p['office_logo'] ? '/uploads/' . $p['office_logo'] : null;
+        $image = $p['cover_thumb'] ? '/uploads/' . $p['cover_thumb'] : null;
+        $body = $p['title'] . ' — ' . price_label($p);
+        $url = '/property/' . (int) $p['id'];
+
+        if (!empty($p['office_id'])) {
+            $s = db()->prepare('SELECT subscription_id FROM office_follows WHERE office_id = ?');
+            $s->execute([$p['office_id']]);
+            $notified = array_flip(array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN)));
+            if ($notified) {
+                send_notification((int) $p['user_id'], (int) $p['office_id'], 'followers',
+                    $p['office_name'] . ' · ' . t('push_new_listing'), $body, $url, (int) $p['id'], $icon, $image, 'auto');
+            }
+        }
+
+        // Saved searches → group matching subscriptions, one push per device
+        $rows = db()->query('SELECT ss.id, ss.subscription_id, ss.filters, s.endpoint, s.p256dh, s.auth, s.lang
+            FROM saved_searches ss JOIN push_subscriptions s ON s.id = ss.subscription_id')->fetchAll();
+        $targets = [];
+        foreach ($rows as $r) {
+            $sid = (int) $r['subscription_id'];
+            if (isset($notified[$sid]) || isset($targets[$sid])) {
+                continue;
+            }
+            $f = json_decode((string) $r['filters'], true);
+            if (is_array($f) && listing_matches_filters($p, search_filters($f))) {
+                $targets[$sid] = $r;
+                db()->prepare('UPDATE saved_searches SET hits = hits + 1 WHERE id = ?')->execute([$r['id']]);
+            }
+        }
+        if (!$targets) {
+            return;
+        }
+        $base = absolute_base_url();
+        $ins = db()->prepare("INSERT INTO notifications (subscription_id, audience, kind, title, body, url, property_id, sent, failed)
+            VALUES (?, 'search', 'auto', ?, ?, ?, ?, ?, ?)");
+        $res = push_send_many(array_map(static fn($r) => ['id' => $r['subscription_id']] + $r, array_values($targets)), [
+            'title' => t('push_search_match'),
+            'body'  => $body,
+            'url'   => $base . $url,
+            'icon'  => $base . ($icon ?? '/assets/img/icon-192.png'),
+            'badge' => $base . '/assets/img/badge-72.png',
+            'image' => $image ? $base . $image : null,
+            'tag'   => 'p' . (int) $p['id'],
+            'dir'   => 'auto',
+        ]);
+        $gone = array_flip($res['gone']);
+        foreach ($targets as $sid => $r) {
+            if (!isset($gone[$sid])) {
+                $ins->execute([$sid, t('push_search_match'), $body, $url, (int) $p['id'], 1, 0]);
+            }
+        }
+        if ($res['gone']) {
+            db()->exec('DELETE FROM push_subscriptions WHERE id IN (' . implode(',', array_map('intval', $res['gone'])) . ')');
+        }
     } catch (Throwable $e) {
-        error_log('aqarat notify_new_listing: ' . $e->getMessage());
+        error_log('aqarat notify_listing_published: ' . $e->getMessage());
     }
+}
+
+/** Does a property satisfy a (normalised) search filter set? Mirrors search_where(). */
+function listing_matches_filters(array $p, array $f): bool
+{
+    if ($p['status'] !== 'published') {
+        return false;
+    }
+    foreach (['purpose', 'type', 'deed'] as $k) {
+        if (($f[$k] ?? '') !== '' && $p[$k] !== $f[$k]) {
+            return false;
+        }
+    }
+    $usd = (int) $p['price_usd'];
+    return !(
+        (!empty($f['city']) && (int) $p['city_id'] !== (int) $f['city'])
+        || ($f['min_price'] !== null && $usd < $f['min_price'])
+        || ($f['max_price'] !== null && $usd > $f['max_price'])
+        || ($f['min_area'] !== null && (float) $p['area'] < $f['min_area'])
+        || ($f['beds'] !== null && (int) $p['bedrooms'] < $f['beds'])
+        || ($f['baths'] !== null && (int) $p['bathrooms'] < $f['baths'])
+        || ($f['furnished'] && !(int) $p['furnished'])
+        || ($f['office'] !== null && (int) ($p['office_id'] ?? 0) !== $f['office'])
+        || ($f['q'] !== '' && !text_matches_all($f['q'], $p['title'] . ' ' . $p['description'] . ' ' . $p['district'] . ' ' . $p['address'] . ' ' . $p['project']))
+    );
+}
+
+function text_matches_all(string $q, string $haystack): bool
+{
+    foreach (preg_split('/[\s,،]+/u', $q, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $term) {
+        if (mb_stripos($haystack, $term) === false) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** Only the meaningful (non-default) filters, for storage and labels. */
+function compact_filters(array $f): array
+{
+    unset($f['sort']);
+    return array_filter($f, static fn($v) => $v !== null && $v !== '' && $v !== 0 && $v !== false);
+}
+
+/** Human label in the current language, e.g. "خانوو · هەولێر · ≤ $200,000 · 3+ ژوور". */
+function search_label(array $f): string
+{
+    $parts = [];
+    if (!empty($f['purpose'])) { $parts[] = t('purpose_' . $f['purpose']); }
+    if (!empty($f['type'])) { $parts[] = t('type_' . $f['type']); }
+    if (!empty($f['city'])) {
+        foreach (cities() as $c) {
+            if ((int) $c['id'] === (int) $f['city']) { $parts[] = city_name($c); }
+        }
+    }
+    if (isset($f['min_price']) && isset($f['max_price'])) { $parts[] = money((int) $f['min_price']) . '–' . money((int) $f['max_price']); }
+    elseif (isset($f['max_price'])) { $parts[] = '≤ ' . money((int) $f['max_price']); }
+    elseif (isset($f['min_price'])) { $parts[] = '≥ ' . money((int) $f['min_price']); }
+    if (!empty($f['beds'])) { $parts[] = (int) $f['beds'] . '+ ' . t('beds_short'); }
+    if (!empty($f['min_area'])) { $parts[] = '≥ ' . (int) $f['min_area'] . ' ' . t('sqm'); }
+    if (!empty($f['deed'])) { $parts[] = t('deed_' . $f['deed']); }
+    if (!empty($f['furnished'])) { $parts[] = t('furnished'); }
+    if (!empty($f['q'])) { $parts[] = '“' . $f['q'] . '”'; }
+    return $parts ? implode(' · ', $parts) : t('all_listings');
 }

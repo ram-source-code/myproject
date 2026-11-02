@@ -21,7 +21,8 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
 <div class="container page-head page-head-row">
     <div>
         <h1 class="page-title">
-            <?php if ($f['purpose'] === 'sale'): ?><?= e(t('props_for_sale')) ?>
+            <?php if (!empty($heading)): ?><?= e($heading) ?>
+            <?php elseif ($f['purpose'] === 'sale'): ?><?= e(t('props_for_sale')) ?>
             <?php elseif ($f['purpose'] === 'rent'): ?><?= e(t('props_for_rent')) ?>
             <?php else: ?><?= e(t('nav_listings')) ?><?php endif; ?>
         </h1>
@@ -151,6 +152,10 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                 <noscript><p class="muted"><?= e(t('map_needs_js')) ?></p></noscript>
             </div>
         <?php else: ?>
+            <div class="results-bar">
+            <button type="button" class="btn btn-outline btn-sm" data-save-search="<?= e(json_encode(compact_filters($f), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>">
+                <svg aria-hidden="true"><use href="#i-bell"></use></svg><span><?= e(t('alert_me')) ?></span>
+            </button>
             <form method="get" action="<?= e(url('properties')) ?>" class="sort-bar" data-autosubmit>
                 <?php foreach ($query as $k => $v): if ($k === 'sort') continue; ?>
                     <input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>">
@@ -163,6 +168,7 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                 </select>
                 <noscript><button class="btn btn-sm btn-outline" type="submit"><?= e(t('apply')) ?></button></noscript>
             </form>
+            </div>
 
             <?php if ($items): ?>
                 <div class="grid-cards">

@@ -11,7 +11,7 @@ $isLive = $p['status'] === 'published';
 ?>
 <div class="container property-page" data-recent-item
      data-id="<?= (int) $p['id'] ?>" data-title="<?= e($p['title']) ?>" data-price="<?= e(price_label($p)) ?>"
-     data-url="<?= e(url('property/' . $p['id'])) ?>" data-thumb="<?= e($p['cover_thumb'] ? upload_url($p['cover_thumb']) : '') ?>">
+     data-url="<?= e(property_url($p)) ?>" data-thumb="<?= e($p['cover_thumb'] ? upload_url($p['cover_thumb']) : '') ?>">
     <nav class="breadcrumbs" aria-label="<?= e(t('breadcrumbs')) ?>">
         <ol>
             <li><a href="<?= e(url('/')) ?>"><?= e(t('nav_home')) ?></a></li>
@@ -127,6 +127,19 @@ $isLive = $p['status'] === 'published';
             </section>
             <?php endif; ?>
 
+            <?php if (!empty($videos)): ?>
+            <section class="panel" aria-labelledby="vid-h">
+                <h2 id="vid-h" class="panel-title"><?= e(t('videos')) ?></h2>
+                <div class="video-list">
+                    <?php foreach ($videos as $v): ?>
+                        <video controls playsinline preload="metadata" src="<?= e(upload_url($v['filename'])) ?>#t=0.1"
+                               <?php if (!empty($p['cover_thumb'])): ?>poster="<?= e(upload_url($p['cover_thumb'])) ?>"<?php endif; ?>
+                               aria-label="<?= e(t('video_of', ['title' => $p['title']])) ?>"></video>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <?php endif; ?>
+
             <?php if ($features): ?>
             <section class="panel" aria-labelledby="feat-h">
                 <h2 id="feat-h" class="panel-title"><?= e(t('features')) ?></h2>
@@ -216,6 +229,25 @@ $isLive = $p['status'] === 'published';
                 </details>
                 <?php endif; ?>
             </div>
+            <?php if ($isLive && !$canManage): ?>
+            <details class="report-box" id="report">
+                <summary><svg aria-hidden="true"><use href="#i-flag"></use></svg><?= e(t('report_listing')) ?></summary>
+                <form method="post" action="<?= e(url('property/' . $p['id'] . '/report')) ?>" class="stack">
+                    <?= csrf_field() ?>
+                    <fieldset class="stack-sm">
+                        <legend><?= e(t('report_reason')) ?></legend>
+                        <?php foreach (REPORT_REASONS as $i => $rs): ?>
+                            <label class="check"><input type="radio" name="reason" value="<?= e($rs) ?>" <?= $i === 0 ? 'required' : '' ?>><span><?= e(t('report_' . $rs)) ?></span></label>
+                        <?php endforeach; ?>
+                    </fieldset>
+                    <div class="field">
+                        <label for="rp-details"><?= e(t('report_details')) ?> <span class="optional">(<?= e(t('optional')) ?>)</span></label>
+                        <textarea id="rp-details" name="details" rows="2" maxlength="500"></textarea>
+                    </div>
+                    <button class="btn btn-outline btn-sm" type="submit"><?= e(t('send_report')) ?></button>
+                </form>
+            </details>
+            <?php endif; ?>
         </aside>
     </div>
 
