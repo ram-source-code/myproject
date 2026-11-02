@@ -1,0 +1,59 @@
+<div class="container dash-layout">
+    <?= render_partial('partials/dash_nav', ['active' => $active]) ?>
+    <div class="dash-main">
+        <h1 class="page-title"><?= e(t('admin_overview')) ?></h1>
+        <dl class="stat-tiles">
+            <div><dt><?= e(t('admin_users')) ?></dt><dd><?= number_format((int) $stats['users']) ?></dd></div>
+            <div><dt><?= e(t('admin_listings')) ?></dt><dd><?= number_format((int) $stats['properties']) ?></dd></div>
+            <div><dt><?= e(t('status_published')) ?></dt><dd><?= number_format((int) $stats['published']) ?></dd></div>
+            <div><dt><?= e(t('status_pending')) ?></dt><dd><a href="<?= e(url('admin/properties', ['status' => 'pending'])) ?>"><?= number_format((int) $stats['pending']) ?></a></dd></div>
+            <div><dt><?= e(t('inquiries')) ?></dt><dd><?= number_format((int) $stats['inquiries']) ?></dd></div>
+            <div><dt><?= e(t('views')) ?></dt><dd><?= number_format((int) $stats['views']) ?></dd></div>
+        </dl>
+
+        <div class="grid-2 align-start">
+            <section class="panel" aria-labelledby="pend-h">
+                <h2 id="pend-h" class="panel-title"><?= e(t('awaiting_review')) ?></h2>
+                <?php if ($pending): ?>
+                    <ul class="review-list">
+                        <?php foreach ($pending as $p): ?>
+                            <li>
+                                <div>
+                                    <a href="<?= e(url('property/' . $p['id'])) ?>"><?= e($p['title']) ?></a>
+                                    <p class="muted small"><?= e($p['owner_name']) ?> · <?= e(price_label($p)) ?></p>
+                                </div>
+                                <div class="row-actions">
+                                    <form method="post" action="<?= e(url('admin/properties/' . $p['id'] . '/status')) ?>">
+                                        <?= csrf_field() ?><input type="hidden" name="status" value="published">
+                                        <button class="btn btn-primary btn-sm" type="submit"><?= e(t('approve')) ?><span class="visually-hidden">: <?= e($p['title']) ?></span></button>
+                                    </form>
+                                    <form method="post" action="<?= e(url('admin/properties/' . $p['id'] . '/status')) ?>">
+                                        <?= csrf_field() ?><input type="hidden" name="status" value="rejected">
+                                        <button class="btn btn-ghost btn-sm text-danger" type="submit"><?= e(t('reject')) ?><span class="visually-hidden">: <?= e($p['title']) ?></span></button>
+                                    </form>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php else: ?>
+                    <p class="muted"><?= e(t('nothing_pending')) ?></p>
+                <?php endif; ?>
+            </section>
+
+            <section class="panel" aria-labelledby="city-h">
+                <h2 id="city-h" class="panel-title"><?= e(t('listings_by_city')) ?></h2>
+                <?php $max = max(1, ...array_map(static fn($r) => (int) $r['n'], $byCity ?: [['n' => 1]])); ?>
+                <ul class="bar-list">
+                    <?php foreach ($byCity as $r): ?>
+                        <li>
+                            <span class="bar-label"><?= e(lang() === 'ar' ? $r['name_ar'] : $r['name_en']) ?></span>
+                            <meter min="0" max="<?= $max ?>" value="<?= (int) $r['n'] ?>" aria-label="<?= e(lang() === 'ar' ? $r['name_ar'] : $r['name_en']) ?>"></meter>
+                            <span class="bar-value"><?= (int) $r['n'] ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <p class="muted small"><?= e(t('db_mode')) ?>: <code><?= e($journal) ?></code> · <?= e(t('photos')) ?>: <?= (int) $stats['images'] ?></p>
+            </section>
+        </div>
+    </div>
+</div>

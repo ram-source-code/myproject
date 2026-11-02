@@ -1,0 +1,8 @@
+/data/*.sqlite
+/data/*.sqlite-wal
+/data/*.sqlite-shm
+/public/uploads/*
+!/public/uploads/.htaccess
+!/public/uploads/.gitkeep
+/vendor/
+.DS_Store
