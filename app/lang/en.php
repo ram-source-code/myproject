@@ -562,4 +562,7 @@ return [
     'ios_step_1' => 'In Safari, tap the Share button',
     'ios_step_2' => 'Scroll down and tap “Add to Home Screen”',
     'ios_step_3' => 'Open Aqarat from your Home Screen and tap Follow again',
+    'chk_xampp_ext' => 'Open :ini, remove the “;” in front of extension=:ext, save, then Stop and Start Apache in the XAMPP Control Panel.',
+    'chk_xampp_php' => 'Install a current XAMPP (PHP 8.1 or newer) from apachefriends.org.',
+    'chk_xampp_upload' => 'For phone videos: in :ini set upload_max_filesize=64M and post_max_size=160M, then restart Apache in the XAMPP Control Panel.',
 ];

@@ -39,10 +39,18 @@ function p256_public_pem(string $raw): string
     return "-----BEGIN PUBLIC KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END PUBLIC KEY-----\n";
 }
 
+/** Windows PHP (XAMPP) cannot create keys without an openssl.cnf — always pass our minimal one. */
+function openssl_args(): array
+{
+    $cnf = dirname(__DIR__) . '/app/certs/openssl.cnf';
+    $cnf = is_file($cnf) ? $cnf : __DIR__ . '/certs/openssl.cnf';
+    return is_file($cnf) ? ['config' => $cnf] : [];
+}
+
 /** @return array{0: OpenSSLAsymmetricKey, 1: string} [private key, raw public key] */
 function p256_generate(): array
 {
-    $key = openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC]);
+    $key = openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC] + openssl_args());
     if ($key === false) {
         throw new RuntimeException('EC key generation failed');
     }
@@ -70,7 +78,9 @@ function vapid_keys(): array
         }
     }
     [$priv, $pub] = p256_generate();
-    openssl_pkey_export($priv, $pem);
+    if (!openssl_pkey_export($priv, $pem, null, openssl_args())) {
+        throw new RuntimeException('VAPID key export failed: ' . openssl_error_string());
+    }
     $keys = ['public' => b64url_encode($pub), 'private_pem' => $pem];
     $dir = dirname($file);
     if (!is_dir($dir)) {
@@ -199,6 +209,8 @@ function push_send_many(array $subs, array $message): array
                 CURLOPT_CONNECTTIMEOUT => 5,
                 CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
                 CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_HTTPHEADER     => [
                     'Content-Type: application/octet-stream',
                     'Content-Encoding: aes128gcm',
@@ -207,6 +219,9 @@ function push_send_many(array $subs, array $message): array
                     'Authorization: ' . $auth,
                 ],
             ]);
+            if (($ca = bundled_ca_file()) !== null) {
+                curl_setopt($ch, CURLOPT_CAINFO, $ca);
+            }
             curl_multi_add_handle($mh, $ch);
             $handles[(int) $sub['id']] = $ch;
         }
@@ -233,6 +248,21 @@ function push_send_many(array $subs, array $message): array
         curl_multi_close($mh);
     }
     return $result;
+}
+
+/**
+ * Windows/macOS PHP builds (XAMPP, MAMP) often have no CA bundle configured, so TLS to FCM/Apple fails with
+ * "unable to get local issuer certificate". Use the bundled Mozilla CA list only in that case.
+ */
+function bundled_ca_file(): ?string
+{
+    static $ca = false;
+    if ($ca !== false) {
+        return $ca;
+    }
+    $configured = (string) ini_get('curl.cainfo') !== '' || (string) ini_get('openssl.cafile') !== '';
+    $file = __DIR__ . '/certs/cacert.pem';
+    return $ca = (!$configured && PHP_OS_FAMILY !== 'Linux' && is_file($file)) ? $file : null;
 }
 
 /**

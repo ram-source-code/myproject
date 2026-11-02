@@ -567,4 +567,7 @@ return [
     'ios_step_1' => 'لە Safari دوگمەی Share دابگرە',
     'ios_step_2' => 'بچۆ خوارەوە و «Add to Home Screen» دابگرە',
     'ios_step_3' => 'عەقارات لە شاشەی سەرەکییەوە بکەرەوە و دووبارە فۆڵۆ دابگرە',
+    'chk_xampp_ext' => 'فایلی :ini بکەرەوە، «;» لە پێش extension=:ext لابەرە، پاشەکەوتی بکە، پاشان لە XAMPP Control Panel ـدا Apache بوەستێنە و دەستی پێبکەرەوە.',
+    'chk_xampp_php' => 'وەشانێکی نوێی XAMPP (PHP 8.1 یان نوێتر) لە apachefriends.org دابەزێنە.',
+    'chk_xampp_upload' => 'بۆ ڤیدیۆی مۆبایل: لە :ini بیکە بە upload_max_filesize=64M و post_max_size=160M، پاشان Apache لە XAMPP Control Panel دەستپێبکەرەوە.',
 ];

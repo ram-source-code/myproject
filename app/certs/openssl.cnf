@@ -1,0 +1,9 @@
+# Minimal OpenSSL config. Windows PHP builds (e.g. XAMPP) fail to create keys without one;
+# Aqarat passes this file when generating the Web Push (VAPID) key pair.
+openssl_conf = default_conf
+[ default_conf ]
+[ req ]
+default_bits = 2048
+default_md = sha256
+distinguished_name = req_distinguished_name
+[ req_distinguished_name ]

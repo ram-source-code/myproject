@@ -76,6 +76,8 @@ if (PHP_SAPI !== 'cli') {
             . '<h1>Almost there</h1><p>The app needs to create its database, but this folder is not writable by PHP:</p>'
             . '<p><code>' . $dir . '</code></p><p>In your hosting file manager (or FTP), set the permissions of the <b>data</b> and '
             . '<b>uploads</b> folders to <b>755</b> (or 775), then reload this page. Setup continues automatically.</p>'
+            . '<p><b>XAMPP on macOS/Linux:</b> run <code>chmod -R 777 data uploads</code> in the app folder (fine for local testing). '
+            . '<b>XAMPP on Windows:</b> make sure the folder is not read-only and is not inside a OneDrive-synced folder.</p>'
             . '<p dir="rtl" lang="ckb">مۆڵەتی فۆڵدەرەکانی <b>data</b> و <b>uploads</b> بکە بە <b>755</b> و پەڕەکە نوێ بکەرەوە.</p></body>';
         exit;
     }
