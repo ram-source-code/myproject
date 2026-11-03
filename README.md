@@ -124,9 +124,10 @@ and on `localhost`).
 
 ## Icons
 All icons are **self-hosted SVG**: [Lucide](https://lucide.dev) (ISC) plus the WhatsApp/Telegram marks from
-Simple Icons (CC0). The full packs live in `bin/icon-pack/` (not web-served); `php bin/build-icons.php` builds
-an inline sprite of only the icons in use (`app/views/partials/icons.php`, ~16 KB) and the few CSS mask icons
-(`assets/icons/`). No icon fonts, no emoji or text glyphs as icons.
+Simple Icons (CC0). The source SVGs of the icons in use live in `bin/icon-pack/` (not web-served);
+`php bin/build-icons.php` builds the inline sprite (`app/views/partials/icons.php`, ~16 KB) and the few CSS mask
+icons (`assets/icons/`). To add an icon, download its SVG from lucide.dev into `bin/icon-pack/lucide/`, add it to
+the list in the script and run it. No icon fonts, no emoji or text glyphs as icons.
 
 ## Self-contained by design
 Everything is served from your own folder: **fonts are self-hosted** (Noto Sans Arabic for Kurdish/Arabic,

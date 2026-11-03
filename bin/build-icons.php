@@ -5,7 +5,8 @@
  *
  *   php bin/build-icons.php
  *
- * To add an icon: pick a name from bin/icon-pack/lucide/ and add it to $MAP below.
+ * Only the icons in use are kept in bin/icon-pack/lucide/. To add one: download its SVG from https://lucide.dev
+ * (same ISC licence) into bin/icon-pack/lucide/, add it to $MAP below and run this script.
  */
 declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { exit(1); }
