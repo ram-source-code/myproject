@@ -115,7 +115,11 @@ ink-and-watercolour sketch with GD alone (`app/sketch.php`, scenes in `app/sketc
 and true to how property here looks: stone-clad villas with a columned porch, iron gate and rooftop water tanks,
 solar heater and dish; flat-roofed houses behind a yard wall with the generator cable coming in; gated tower
 compounds; shop rows with roller shutters and split-AC units; plots with survey stakes and concrete frames rising
-next door; and rooms (living room with a kilim rug, kitchen, shop and office interiors). About 0.3 s a photo.
+next door; a villa's garden with its swimming pool; and rooms (living room with a kilim rug, kitchen, shop and
+office interiors). About 0.3 s a photo.
+Demo offices get hand-drawn logos too: a ring stamp in one of five colours with one of five emblems (arched doorway
+with a key, flat-roofed house with its water tank, the Citadel, a house under the mountains, a minaret).
+A listing without photos shows the drawn house with its sale board instead of an image icon.
 - **Instant navigation:** Speculation Rules prefetch likely next pages on hover/touch and prerender listing,
   office and city pages (prerenders never inflate view counts — the page reports the view only when shown).
 - **Smooth page changes:** cross-document **View Transitions**; the card photo morphs into the listing hero and

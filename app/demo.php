@@ -1,25 +1,33 @@
 <?php
 declare(strict_types=1);
 
-/* Demo data: offices with logos, ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
+/* Demo data: offices with hand-drawn logos, ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
  * and (only when ffmpeg exists) short demo videos. Used by bin/seed.php --demo and the web installer. */
 
-function demo_logo(int $seed, string $letter): string
+/** Give a demo office a hand-drawn logo (ring stamp in one of five colours with one of five emblems, see sk_logo). */
+function demo_office_logo(int $officeId): ?string
 {
-    $palette = [[15, 118, 110], [180, 83, 9], [29, 78, 216], [190, 18, 60], [109, 40, 217]];
-    [$r, $g, $b] = $palette[$seed % count($palette)];
-    $im = imagecreatetruecolor(400, 400);
-    imagefill($im, 0, 0, imagecolorallocate($im, $r, $g, $b));
-    $white = imagecolorallocate($im, 255, 255, 255);
-    // stylised roof + building blocks
-    imagefilledpolygon($im, [70, 200, 200, 80, 330, 200, 300, 200, 200, 115, 100, 200], $white);
-    imagefilledrectangle($im, 120, 210, 185, 320, $white);
-    imagefilledrectangle($im, 215, 210, 280, 320, $white);
-    imagefilledellipse($im, 320, 90, 50, 50, imagecolorallocate($im, 251, 191, 36));
-    $tmp = tempnam(sys_get_temp_dir(), 'aqlogo') . '.png';
-    imagepng($im, $tmp);
-    imagedestroy($im);
-    return $tmp;
+    try {
+        require_once __DIR__ . '/sketch_scenes.php';
+        $colors = [[31, 86, 65], [176, 82, 44], [40, 96, 140], [180, 50, 42], [110, 80, 130]];
+        $tmp = sk_logo(9000 + $officeId, $officeId * 3 + intdiv($officeId, 5), $colors[$officeId % count($colors)], 256);
+        $im = imagecreatefromjpeg($tmp);
+        @unlink($tmp);
+        @unlink(substr($tmp, 0, -4));
+        $name = bin2hex(random_bytes(16)) . '.webp';
+        $ok = $im && imagewebp($im, ensure_upload_dir() . '/' . $name, (int) config('webp_quality'));
+        if ($im) {
+            imagedestroy($im);
+        }
+        if (!$ok) {
+            return null;
+        }
+        db()->prepare("UPDATE offices SET logo = ? WHERE id = ? AND (logo IS NULL OR logo = '')")->execute([$name, $officeId]);
+        return $name;
+    } catch (Throwable $e) {
+        error_log('aqarat office logo: ' . $e->getMessage());
+        return null;
+    }
 }
 
 /**
@@ -70,12 +78,9 @@ function seed_demo_data(int $adminId): void
         $exists = $pdo->prepare('SELECT id FROM offices WHERE user_id = ?');
         $exists->execute([$uid]);
         if (!$exists->fetchColumn()) {
-            $tmp = demo_logo($i, mb_substr($name, 0, 1));
-            $logo = process_logo_upload(['name' => 'logo.png', 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => filesize($tmp), 'type' => 'image/png']);
-            @unlink($tmp);
-            @unlink(substr($tmp, 0, -4));
-            $pdo->prepare('INSERT INTO offices (user_id, name, slug, logo, about, phone, whatsapp, address, city_id, is_verified) VALUES (?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$uid, $name, 'office-' . ($i + 1), $logo, $about, $ph, $ph, $addr, $cityId($cityEn), $verified]);
+            $pdo->prepare('INSERT INTO offices (user_id, name, slug, about, phone, whatsapp, address, city_id, is_verified) VALUES (?,?,?,?,?,?,?,?,?)')
+                ->execute([$uid, $name, 'office-' . ($i + 1), $about, $ph, $ph, $addr, $cityId($cityEn), $verified]);
+            demo_office_logo((int) $pdo->lastInsertId());
             $pdo->prepare("UPDATE offices SET activated_at = datetime('now') WHERE user_id = ?")->execute([$uid]);   // demo offices are paid up
         }
         $officeUsers[$cityEn][] = $uid;
