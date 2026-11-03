@@ -1,8 +1,34 @@
 <?php
 declare(strict_types=1);
 
-/* Demo data: offices (with their hand-drawn default logos), ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
+/* Demo data: offices with hand-drawn logos, ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
  * and (only when ffmpeg exists) short demo videos. Used by bin/seed.php --demo and the web installer. */
+
+/** Give a demo office a hand-drawn logo (ring stamp in one of five colours with one of five emblems, see sk_logo). */
+function demo_office_logo(int $officeId): ?string
+{
+    try {
+        require_once __DIR__ . '/sketch_scenes.php';
+        $colors = [[31, 86, 65], [176, 82, 44], [40, 96, 140], [180, 50, 42], [110, 80, 130]];
+        $tmp = sk_logo(9000 + $officeId, $officeId * 3 + intdiv($officeId, 5), $colors[$officeId % count($colors)], 256);
+        $im = imagecreatefromjpeg($tmp);
+        @unlink($tmp);
+        @unlink(substr($tmp, 0, -4));
+        $name = bin2hex(random_bytes(16)) . '.webp';
+        $ok = $im && imagewebp($im, ensure_upload_dir() . '/' . $name, (int) config('webp_quality'));
+        if ($im) {
+            imagedestroy($im);
+        }
+        if (!$ok) {
+            return null;
+        }
+        db()->prepare("UPDATE offices SET logo = ? WHERE id = ? AND (logo IS NULL OR logo = '')")->execute([$name, $officeId]);
+        return $name;
+    } catch (Throwable $e) {
+        error_log('aqarat office logo: ' . $e->getMessage());
+        return null;
+    }
+}
 
 /**
  * A demo listing photo: an ink-and-watercolour sketch of this kind of property as it really looks here
@@ -54,7 +80,7 @@ function seed_demo_data(int $adminId): void
         if (!$exists->fetchColumn()) {
             $pdo->prepare('INSERT INTO offices (user_id, name, slug, about, phone, whatsapp, address, city_id, is_verified) VALUES (?,?,?,?,?,?,?,?,?)')
                 ->execute([$uid, $name, 'office-' . ($i + 1), $about, $ph, $ph, $addr, $cityId($cityEn), $verified]);
-            office_draw_logo((int) $pdo->lastInsertId());
+            demo_office_logo((int) $pdo->lastInsertId());
             $pdo->prepare("UPDATE offices SET activated_at = datetime('now') WHERE user_id = ?")->execute([$uid]);   // demo offices are paid up
         }
         $officeUsers[$cityEn][] = $uid;

@@ -413,7 +413,6 @@ function admin_office_new(): void
             ->execute([$oid, $d['office'], $amount, input('currency') === 'USD' ? 'USD' : 'IQD', $months, $admin['id']]);
     }
     $pdo->exec('COMMIT');
-    office_draw_logo($oid);            // drawn after the commit: no image work while holding the write lock
     admin_log('office.create', "#$oid " . $d['office']);
     $_SESSION['_created'] = login_handover($d['office'], $d['phone'], $password, false);
     redirect(url('admin/offices') . '#created');
