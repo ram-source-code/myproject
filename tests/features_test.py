@@ -242,5 +242,51 @@ lp = php("echo json_encode((int) db()->query(\"SELECT id FROM properties WHERE s
 ok(all(sess().get(B + f'/property/{lp}').headers.get('X-Page-Cache') != 'HIT' for _ in range(2)), 'listing pages are never cached (views, enquiry form)')
 ok(all(sess().get(B + '/properties?q=villa').headers.get('X-Page-Cache') != 'HIT' for _ in range(2)), 'free-text searches are not cached')
 
+# ── Notifications: who hears about a new listing and a price drop
+def fake_sub(endpoint):
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization
+    k = ec.generate_private_key(ec.SECP256R1())
+    pub = k.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    b = lambda x: base64.urlsafe_b64encode(x).rstrip(b'=').decode()
+    return {'endpoint': endpoint, 'keys': {'p256dh': b(pub), 'auth': b(os.urandom(16))}}
+dev = sess(); h = {'X-CSRF-Token': meta_tok(dev.get(B + '/notifications').text), 'Accept': 'application/json'}
+tag = os.urandom(3).hex()
+follower = fake_sub(f'https://fcm.googleapis.com/fcm/send/ft-follow-{tag}')
+everything = fake_sub(f'https://fcm.googleapis.com/fcm/send/ft-all-{tag}')
+dev.post(B + '/push/follow', json={'office_id': office['oid'], 'subscription': follower}, headers=h)
+dev.post(B + '/push/search', json={'subscription': everything, 'query': {}}, headers=h)
+st = dev.post(B + '/push/status', json={'endpoint': everything['endpoint']}, headers=h).json()
+ok(st.get('all_listings') and not st.get('searches'), '"every new listing" is a switch, not a row in saved searches')
+alive = lambda: php("echo json_encode(db()->query('SELECT endpoint FROM push_subscriptions')->fetchAll(PDO::FETCH_COLUMN));")
+# start from a live listing with no recent price cut (earlier sections leave it in review / just reduced)
+php(f"db()->exec(\"UPDATE properties SET status = 'published', prev_price_usd = NULL, price_dropped_at = NULL WHERE id = {pid}\"); echo 1;")
+row = php(f"echo json_encode(db()->query('SELECT * FROM properties WHERE id = {pid}')->fetch());")
+form = {'_csrf': tok(o.get(B + f'/dashboard/properties/{pid}/edit').text), 'title': row['title'], 'description': row['description'], 'purpose': row['purpose'],
+        'type': row['type'], 'city_id': row['city_id'], 'district': row['district'], 'price': int(row['price'] * 0.8), 'currency': row['currency'],
+        'area': row['area'], 'bedrooms': row['bedrooms'], 'bathrooms': row['bathrooms'], 'rent_period': row['rent_period'] or '', 'project': row['project'] or '',
+        'address': row['address'] or '', 'deed': row['deed'] or '', 'floor': row['floor'] or '', 'year_built': row['year_built'] or '',
+        'lat': row['lat'] or '', 'lng': row['lng'] or ''}
+for f_ in json.loads(row['features'] or '[]'):
+    form.setdefault('features[]', []).append(f_)
+if row['furnished']:
+    form['furnished'] = '1'
+o.post(B + f'/dashboard/properties/{pid}', data=form)
+st2 = php(f"echo json_encode(db()->query('SELECT status FROM properties WHERE id = {pid}')->fetchColumn());")
+ok(st2 == 'published', f'changing only the price keeps the listing live (no review): {st2}')
+drop = php(f"echo json_encode(db()->query(\"SELECT sent + failed FROM notifications WHERE property_id = {pid} AND audience = 'followers' AND url LIKE '%#price' ORDER BY id DESC\")->fetchColumn());")
+ok(drop == 1, f'price drop pushed to the office follower ({drop})')
+left = alive()
+ok(everything['endpoint'] not in left and follower['endpoint'] not in left, 'price drop pushed to the "every new listing" device too (fake tokens are then dropped as expired)')
+# renewing a subscription (site keys changed) keeps what the device followed
+old = fake_sub(f'https://fcm.googleapis.com/fcm/send/ft-old-{tag}'); new = fake_sub(f'https://fcm.googleapis.com/fcm/send/ft-new-{tag}')
+dev.post(B + '/push/follow', json={'office_id': office['oid'], 'subscription': old}, headers=h)
+r = dev.post(B + '/push/renew', json={'old_endpoint': old['endpoint'], 'subscription': new}, headers=h)
+st = dev.post(B + '/push/status', json={'endpoint': new['endpoint']}, headers=h).json()
+ok(r.status_code == 200 and [x['id'] for x in st.get('offices', [])] == [office['oid']] and old['endpoint'] not in alive(), 'renewed subscription keeps the followed office, old one removed')
+ok(dev.post(B + '/push/test', json={'endpoint': 'https://fcm.googleapis.com/fcm/send/nobody'}, headers=h).status_code == 404, 'test notification needs this device to be subscribed')
+t = dev.post(B + '/push/test', json={'endpoint': new['endpoint']}, headers=h)
+ok(t.status_code in (200, 502) and t.json().get('message'), 'test notification reports what the push service said: ' + t.json().get('message', ''))
+
 print(f'\n{fails} failure(s)')
 sys.exit(1 if fails else 0)

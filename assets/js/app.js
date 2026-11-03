@@ -678,7 +678,7 @@
         if (perm !== 'granted') throw new Error(tr('push_denied'));
         const reg = await navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' });
         await navigator.serviceWorker.ready;
-        const existing = await reg.pushManager.getSubscription();
+        const existing = await renewIfStale(reg, await reg.pushManager.getSubscription());
         if (existing) return existing;
         // Some browsers (or blocked push services) never settle: fail clearly instead of hanging.
         return Promise.race([
@@ -686,8 +686,30 @@
             new Promise((_, rej) => setTimeout(() => rej(new Error(tr('push_unsupported'))), 15000)),
         ]);
     }
+    /* A subscription made with an older key pair (fresh install, restored data folder) can never be delivered to:
+       subscribe again with the current key and tell the server, which moves follows and saved searches across. */
+    const sameKey = (sub) => {
+        const k = sub?.options?.applicationServerKey;
+        if (!k) return true;                         // browser doesn't say: assume fine
+        const a = new Uint8Array(k), b = b64ToBytes(meta('vapid-key'));
+        return a.length === b.length && a.every((v, i) => v === b[i]);
+    };
+    async function renewIfStale(reg, sub) {
+        if (!sub || sameKey(sub) || Notification.permission !== 'granted') return sub;
+        const old = sub.endpoint;
+        try {
+            await sub.unsubscribe();
+            const fresh = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(meta('vapid-key')) });
+            await postJSON('/push/renew', { old_endpoint: old, subscription: fresh.toJSON() });
+            return fresh;
+        } catch { return null; }
+    }
     let statusPromise = null;
     const fetchStatus = async () => {
+        if (pushSupported) {
+            const reg = await navigator.serviceWorker.getRegistration(BASE + '/');
+            if (reg) await renewIfStale(reg, await reg.pushManager.getSubscription());
+        }
         const sub = await currentSub();
         if (!sub) return { offices: [], feed: [], site_news: false, subscribed: false };
         return postJSON('/push/status', { endpoint: sub.endpoint });
@@ -789,7 +811,43 @@
                 el('p', { class: 'muted small', text: n.body }),
                 el('p', { class: 'muted small', text: n.date }))));
         };
-        getStatus().then(paint);
+        const all = $('[data-all-toggle]', center);
+        let allId = null;
+        const paintAll = (st) => { allId = st.all_listings || null; all.checked = Boolean(allId); };
+        getStatus().then((st) => { paint(st); paintAll(st); });
+        if (!pushSupported) all.disabled = !(isIOS && !isStandalone);
+        all.addEventListener('change', async () => {
+            all.disabled = true;
+            try {
+                if (all.checked) {
+                    const sub = await ensureSub();
+                    await postJSON('/push/search', { query: {}, subscription: sub.toJSON() });
+                    toast(tr('all_on'));
+                } else {
+                    const sub = await currentSub();
+                    if (allId) await postJSON('/push/search/delete', { id: allId, endpoint: sub ? sub.endpoint : '' });
+                    toast(tr('all_off'));
+                }
+                statusPromise = null;
+                const st = await getStatus();
+                paint(st); paintAll(st);
+            } catch (err) {
+                all.checked = !all.checked;
+                if (!err.silent) toast(err.data?.error || err.message);
+            } finally { all.disabled = !pushSupported; }
+        });
+        const test = $('[data-push-test]', center);
+        test?.addEventListener('click', async () => {
+            test.disabled = true;
+            try {
+                const sub = await currentSub();
+                if (!sub) throw new Error(tr('push_test_nosub'));
+                const r = await postJSON('/push/test', { endpoint: sub.endpoint });
+                toast(r.message || tr('push_test_sent'));
+            } catch (err) {
+                if (!err.silent) toast(err.data?.message || err.data?.error || err.message);
+            } finally { test.disabled = false; }
+        });
         news.addEventListener('change', async () => {
             news.disabled = true;
             try {

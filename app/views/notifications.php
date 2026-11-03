@@ -6,6 +6,19 @@
 
     <div class="alert alert-warning" data-push-unsupported hidden><svg aria-hidden="true"><use href="#i-alert"></use></svg><p data-push-unsupported-text><?= e(t('push_unsupported')) ?></p></div>
 
+    <section class="panel" aria-labelledby="all-h">
+        <div class="toggle-row">
+            <div>
+                <h2 id="all-h" class="panel-title"><?= e(t('all_listings')) ?></h2>
+                <p class="muted small"><?= e(t('all_listings_desc')) ?></p>
+            </div>
+            <label class="switch">
+                <input type="checkbox" role="switch" data-all-toggle>
+                <span class="visually-hidden"><?= e(t('all_listings')) ?></span>
+            </label>
+        </div>
+    </section>
+
     <section class="panel" aria-labelledby="news-h">
         <div class="toggle-row">
             <div>
@@ -35,5 +48,11 @@
     <section class="panel" aria-labelledby="feed-h">
         <h2 id="feed-h" class="panel-title"><?= e(t('recent_notifications')) ?></h2>
         <ul class="notif-list" data-feed aria-live="polite"><li class="visually-hidden"><?= e(t('loading')) ?></li><li class="sk-row" aria-hidden="true"><span class="sk sk-dot"></span><span class="sk sk-line"></span></li><li class="sk-row" aria-hidden="true"><span class="sk sk-dot"></span><span class="sk sk-line"></span></li><li class="sk-row" aria-hidden="true"><span class="sk sk-dot"></span><span class="sk sk-line"></span></li></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="test-h">
+        <h2 id="test-h" class="panel-title"><?= e(t('push_test_btn')) ?></h2>
+        <p class="muted small"><?= e(t('push_test_hint')) ?></p>
+        <button type="button" class="btn btn-outline btn-sm" data-push-test><svg aria-hidden="true"><use href="#i-bell"></use></svg><?= e(t('push_test_btn')) ?></button>
     </section>
 </div>

@@ -171,7 +171,9 @@ function push_encrypt(string $payload, string $uaPublicB64, string $authB64, ?Op
  */
 function push_send_many(array $subs, array $message): array
 {
-    $result = ['sent' => 0, 'failed' => 0, 'gone' => []];
+    $result = ['sent' => 0, 'failed' => 0, 'gone' => [], 'rejected' => []];
+    $logged = 0;
+    $okIds = [];
     if (!$subs) {
         return $result;
     }
@@ -236,16 +238,36 @@ function push_send_many(array $subs, array $message): array
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             if ($code >= 200 && $code < 300) {
                 $result['sent']++;
+                $okIds[] = $id;
             } else {
                 $result['failed']++;
                 if (in_array($code, [404, 410], true)) {
-                    $result['gone'][] = $id;
+                    $result['gone'][] = $id;          // the browser unsubscribed or the subscription expired
+                } elseif (in_array($code, [400, 401, 403], true)) {
+                    $result['rejected'][] = $id;      // e.g. subscribed with an old key pair: will never work again
+                }
+                $result['error'] ??= $code ? 'HTTP ' . $code : 'no answer (' . curl_error($ch) . ')';
+                // Say why, so "I didn't get it" can be answered from the error log (first few per send only).
+                if (++$logged <= 3) {
+                    error_log('aqarat push: ' . (parse_url((string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL), PHP_URL_HOST) ?: '?')
+                        . ' answered ' . ($code ?: 'nothing (' . curl_error($ch) . ')') . ' ' . mb_substr(trim((string) curl_multi_getcontent($ch)), 0, 160));
                 }
             }
             curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
         }
         curl_multi_close($mh);
+    }
+    if ($okIds) {
+        db()->exec('UPDATE push_subscriptions SET fail_count = 0 WHERE fail_count > 0 AND id IN (' . implode(',', array_map('intval', $okIds)) . ')');
+    }
+    if ($result['rejected']) {
+        // Rejected three times in a row (bad key, wrong VAPID pair): the device can't be reached; let it go.
+        $in = implode(',', array_map('intval', $result['rejected']));
+        db()->exec("UPDATE push_subscriptions SET fail_count = fail_count + 1 WHERE id IN ($in)");
+        foreach (db()->query("SELECT id FROM push_subscriptions WHERE id IN ($in) AND fail_count >= 3")->fetchAll(PDO::FETCH_COLUMN) as $dead) {
+            $result['gone'][] = (int) $dead;
+        }
     }
     return $result;
 }
@@ -378,8 +400,8 @@ function absolute_base_url(): string
  */
 function notify_listing_published(array $p): void
 {
-    $stmt = db()->prepare("SELECT 1 FROM notifications WHERE property_id = ? AND kind = 'auto'");
-    $stmt->execute([$p['id']]);
+    $stmt = db()->prepare("SELECT 1 FROM notifications WHERE property_id = ? AND kind = 'auto' AND url = ?");
+    $stmt->execute([$p['id'], '/property/' . (int) $p['id']]);
     if ($stmt->fetchColumn()) {
         return;
     }
@@ -468,7 +490,11 @@ function push_to_user(int $userId, array $message): int
     return push_to_subscriptions($st->fetchAll(), $message);
 }
 
-/** Price lowered: tell people who saved the listing and people whose saved search matches (one push per device). */
+/**
+ * Price lowered: tell (one push per device) the office's followers, people who saved the listing,
+ * and people whose saved search matches. Recorded like new-listing alerts, so it shows in each device's feed
+ * and in the office's sent history.
+ */
 function notify_price_drop(int $propertyId, int $oldUsd, int $newUsd): void
 {
     try {
@@ -476,31 +502,70 @@ function notify_price_drop(int $propertyId, int $oldUsd, int $newUsd): void
         if (!$p || $p['status'] !== 'published') {
             return;
         }
-        $targets = [];
+        $followers = [];
+        if (!empty($p['office_id'])) {
+            $st = db()->prepare('SELECT s.id, s.endpoint, s.p256dh, s.auth FROM office_follows f JOIN push_subscriptions s ON s.id = f.subscription_id WHERE f.office_id = ?');
+            $st->execute([$p['office_id']]);
+            foreach ($st->fetchAll() as $r) {
+                $followers[(int) $r['id']] = $r;
+            }
+        }
+        $others = [];
         $st = db()->prepare('SELECT s.id, s.endpoint, s.p256dh, s.auth FROM favorites f JOIN push_subscriptions s ON s.user_id = f.user_id
             WHERE f.property_id = ? AND f.user_id != ?');
         $st->execute([$propertyId, $p['user_id']]);
         foreach ($st->fetchAll() as $r) {
-            $targets[(int) $r['id']] = $r;
-        }
-        foreach (db()->query('SELECT ss.filters, s.id, s.endpoint, s.p256dh, s.auth FROM saved_searches ss JOIN push_subscriptions s ON s.id = ss.subscription_id') as $r) {
-            $f = json_decode((string) $r['filters'], true);
-            if (!isset($targets[(int) $r['id']]) && is_array($f) && listing_matches_filters($p, search_filters($f))) {
-                $targets[(int) $r['id']] = $r;
+            if (!isset($followers[(int) $r['id']])) {
+                $others[(int) $r['id']] = $r;
             }
         }
-        if (!$targets) {
+        foreach (db()->query('SELECT ss.filters, s.id, s.endpoint, s.p256dh, s.auth FROM saved_searches ss JOIN push_subscriptions s ON s.id = ss.subscription_id') as $r) {
+            $sid = (int) $r['id'];
+            if (isset($followers[$sid]) || isset($others[$sid])) {
+                continue;
+            }
+            $f = json_decode((string) $r['filters'], true);
+            if (is_array($f) && listing_matches_filters($p, search_filters($f))) {
+                $others[$sid] = $r;
+            }
+        }
+        if (!$followers && !$others) {
             return;
         }
         $base = absolute_base_url();
         $pct = (int) round((1 - $newUsd / max(1, $oldUsd)) * 100);
-        push_to_subscriptions(array_map(static fn($r) => ['id' => $r['id'], 'endpoint' => $r['endpoint'], 'p256dh' => $r['p256dh'], 'auth' => $r['auth']], $targets), [
-            'title' => t('push_price_drop', ['pct' => $pct]),
-            'body'  => $p['title'] . ' — ' . price_label($p),
-            'url'   => $base . '/property/' . $propertyId,
+        $title = t('push_price_drop', ['pct' => $pct]);
+        $body = $p['title'] . ' — ' . price_label($p);
+        $url = '/property/' . $propertyId . '#price';          // "#price" also tells these rows apart from the new-listing alert
+        $all = array_map(static fn($r) => ['id' => (int) $r['id'], 'endpoint' => $r['endpoint'], 'p256dh' => $r['p256dh'], 'auth' => $r['auth']],
+            array_values($followers + $others));
+        $res = push_send_many($all, [
+            'title' => $title,
+            'body'  => $body,
+            'url'   => $base . $url,
+            'icon'  => $base . ($p['office_logo'] ? '/uploads/' . $p['office_logo'] : '/assets/img/icon-192.png'),
+            'badge' => $base . '/assets/img/badge-72.png',
             'image' => $p['cover_thumb'] ? $base . '/uploads/' . $p['cover_thumb'] : null,
             'tag'   => 'drop' . $propertyId,
+            'dir'   => 'auto',
         ]);
+        $gone = array_flip($res['gone']);
+        if ($followers) {
+            $sentF = count(array_diff_key($followers, $gone));
+            db()->prepare("INSERT INTO notifications (sender_id, office_id, audience, kind, title, body, url, property_id, sent, failed)
+                VALUES (?, ?, 'followers', 'auto', ?, ?, ?, ?, ?, ?)")
+                ->execute([(int) $p['user_id'], (int) $p['office_id'], $title, $body, $url, $propertyId, $sentF, count($followers) - $sentF]);
+        }
+        $ins = db()->prepare("INSERT INTO notifications (subscription_id, audience, kind, title, body, url, property_id, sent, failed)
+            VALUES (?, 'search', 'auto', ?, ?, ?, ?, 1, 0)");
+        foreach (array_keys($others) as $sid) {
+            if (!isset($gone[$sid])) {
+                $ins->execute([$sid, $title, $body, $url, $propertyId]);
+            }
+        }
+        if ($res['gone']) {
+            db()->exec('DELETE FROM push_subscriptions WHERE id IN (' . implode(',', array_map('intval', $res['gone'])) . ')');
+        }
     } catch (Throwable $e) {
         error_log('aqarat notify_price_drop: ' . $e->getMessage());
     }
