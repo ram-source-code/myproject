@@ -216,10 +216,15 @@ $errs = errors();
                         <strong><?= e(t('choose_photos')) ?></strong>
                         <span class="muted"><?= e(t('or_drag')) ?></span>
                     </label>
-                    <input id="f-images" type="file" name="images[]" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+                    <input id="f-images" type="file" name="images[]" multiple accept="image/jpeg,image/png,image/webp,image/gif"
                            data-max-bytes="<?= (int) config('max_upload_bytes') ?>" data-max-files="<?= (int) config('max_images') - count($images) ?>"
                            aria-describedby="upload-status"<?= field_aria('images') ?>>
                     <?= field_error('images') ?>
+                </div>
+                <div class="camera-row">
+                    <label class="btn btn-outline camera-btn" for="f-camera"><svg aria-hidden="true"><use href="#i-camera"></use></svg><?= e(t('take_photo')) ?></label>
+                    <input id="f-camera" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-camera>
+                    <span class="hint"><?= e(t('take_photo_hint')) ?></span>
                 </div>
                 <p id="upload-status" class="hint" aria-live="polite"></p>
                 <ul class="upload-preview" data-preview></ul>
@@ -243,6 +248,10 @@ $errs = errors();
                         <label for="f-videos"><?= e(t('choose_videos')) ?></label>
                         <input id="f-videos" type="file" name="videos[]" multiple accept="video/mp4,video/webm,video/quicktime"
                                data-max-bytes="<?= (int) config('max_video_bytes') ?>" data-video-input>
+                        <div class="camera-row">
+                            <label class="btn btn-outline camera-btn" for="f-video-camera"><svg aria-hidden="true"><use href="#i-video"></use></svg><?= e(t('record_video')) ?></label>
+                            <input id="f-video-camera" class="visually-hidden" type="file" accept="video/mp4,video/webm,video/quicktime" capture="environment" data-video-camera>
+                        </div>
                         <p class="hint" data-video-status aria-live="polite"></p>
                     </div>
                 <?php endif; ?>
