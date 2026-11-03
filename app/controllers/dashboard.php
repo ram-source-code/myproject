@@ -102,6 +102,29 @@ function dash_property_create(): void
     redirect(url("dashboard/properties/$id/edit"));
 }
 
+/** Does this edit change nothing but the price (no other field, no new photos or videos)? */
+function property_edit_is_price_only(array $p, array $d): bool
+{
+    foreach (['images', 'videos'] as $k) {
+        foreach (normalize_files($_FILES[$k] ?? null) as $f) {
+            if ((int) $f['error'] !== UPLOAD_ERR_NO_FILE) {
+                return false;
+            }
+        }
+    }
+    $norm = static fn($v): string => is_float($v) || (is_string($v) && is_numeric($v) && str_contains($v, '.'))
+        ? rtrim(rtrim(number_format((float) $v, 6, '.', ''), '0'), '.') : trim((string) $v);
+    foreach ($d as $k => $v) {
+        if (in_array($k, ['price', 'currency', 'price_usd', 'rent_period'], true) || !array_key_exists($k, $p)) {
+            continue;
+        }
+        if ($norm($v) !== $norm($p[$k])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 function owned_property_or_404(int $id): array
 {
     $p = find_property($id);
@@ -140,8 +163,10 @@ function dash_property_update(int $id): void
 
     // Editing confirms the listing is still available (and brings a hidden one back).
     $status = $p['status'] === 'expired' ? 'published' : $p['status'];
-    // Substantive edits by non-admins send a published listing back to review.
-    if (config('require_approval') && $u['role'] !== 'admin' && in_array($status, ['published', 'rejected'], true)) {
+    // Substantive edits by non-admins send a published listing back to review. Changing only the price does not:
+    // it needs no checking, and sending it to review used to swallow the price-drop alert.
+    if (config('require_approval') && $u['role'] !== 'admin' && in_array($status, ['published', 'rejected'], true)
+        && !($status === 'published' && property_edit_is_price_only($p, $d))) {
         $status = 'pending';
     }
 

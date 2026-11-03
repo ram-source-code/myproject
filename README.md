@@ -89,11 +89,21 @@ and on `localhost`).
 ## Push notifications (Web Push)
 - Pure PHP implementation of **VAPID (ES256 JWT)** and **RFC 8291 aes128gcm** payload encryption using
   `openssl` and `curl` — no Composer packages. Keys are generated on first use in `data/vapid.json`
-  (outside the web root). Back this file up: changing it invalidates all subscriptions.
+  (outside the web root). Back this file up. If it does change, each device re-subscribes with the new key the
+  next time it opens the site and keeps what it followed (`/push/renew`).
 - People tap **Follow** on an office; the browser asks for permission and the device subscription is
-  stored (no account needed). The **Notifications** page lets them manage follows and announcements.
+  stored (no account needed). The **Notifications** page lets them manage follows and announcements, turn on
+  **Every new listing**, and **send themselves a test notification**, which reports what the push service answered.
+- **Who hears what:**
+  - **New listing** (when it goes live, so after approval if approval is on): the office's followers, plus every
+    device whose saved search matches. "Every new listing" is a saved search with no filters.
+  - **Price cut:** the office's followers, people who saved the listing, and matching saved searches. One alert
+    per listing per 3 days. Changing only the price doesn't send a listing back to review; when a cut does go
+    through review, the alert is sent on approval.
+  - **Announcements:** only what the site team broadcasts.
 - Only real push-service hosts (FCM, Mozilla, Apple, WNS) are accepted as endpoints (SSRF protection).
-  Expired subscriptions (404/410) are removed automatically.
+  Expired subscriptions (404/410) are removed automatically, as are devices rejected three times in a row (400/401/403,
+  e.g. an old key). Failed sends write the push service's answer to the PHP error log.
 - iPhone/iPad: notifications work when the site is **added to the Home Screen** (iOS 16.4+); the site
   shows this hint automatically.
 

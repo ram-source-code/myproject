@@ -26,6 +26,8 @@ function routes(): array
         ['POST', '/push/follow',                        'push_follow'],
         ['POST', '/push/unfollow',                      'push_unfollow'],
         ['POST', '/push/news',                          'push_news'],
+        ['POST', '/push/renew',                         'push_renew'],
+        ['POST', '/push/test',                          'push_test'],
         ['POST', '/push/status',                        'push_status'],
         ['GET',  '/api/map',                            'api_map'],
         ['GET',  '/api/count',                          'api_count'],

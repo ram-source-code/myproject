@@ -70,10 +70,16 @@ function admin_property_status(int $id): void
     if (!in_array($status, PROPERTY_STATUSES, true)) {
         abort(400);
     }
+    $before = find_property($id);
     db()->prepare("UPDATE properties SET status = ?, updated_at = datetime('now') WHERE id = ?")->execute([$status, $id]);
     admin_log('listing.status', "#$id → $status");
     if ($status === 'published' && ($p = find_property($id))) {
         notify_listing_published($p); // tell the office's followers (once per listing)
+        // An edit that lowered the price and went to review: the drop is announced when it goes live.
+        if ($before && $before['status'] === 'pending' && $p['prev_price_usd'] && $p['price_dropped_at']
+            && strtotime($p['price_dropped_at'] . ' UTC') > time() - 3 * 86400) {
+            notify_price_drop($id, (int) $p['prev_price_usd'], (int) $p['price_usd']);
+        }
     }
     flash('success', t('status_changed'));
     back('/admin/properties');

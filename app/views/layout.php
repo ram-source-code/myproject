@@ -100,6 +100,7 @@ $useMap = $useMap ?? false;
     'follow' => t('follow'), 'following' => t('following'), 'push_denied' => t('push_denied'),
     'push_unsupported' => t('push_unsupported'), 'push_ios' => t('push_ios'), 'followed_toast' => t('followed_toast'),
     'unfollowed_toast' => t('unfollowed_toast'), 'news_on' => t('news_on'), 'news_off' => t('news_off'),
+    'all_on' => t('all_on'), 'all_off' => t('all_off'), 'push_test_sent' => t('push_test_sent'), 'push_test_nosub' => t('push_test_nosub'),
     'no_follows' => t('no_follows'), 'no_feed' => t('no_feed'), 'unfollow' => t('unfollow'),
     'view' => t('view'), 'beds_short' => t('beds_short'), 'sqm' => t('sqm'), 'map_empty' => t('map_empty'),
     'alert_on' => t('alert_on'), 'delete' => t('delete'), 'no_searches' => t('no_searches'),

@@ -54,6 +54,63 @@ function push_news(): void
     json_out(['ok' => true, 'site_news' => (bool) $enabled]);
 }
 
+/**
+ * The browser had to subscribe again (the site's push keys changed, or the browser rotated the subscription):
+ * move this device's follows, saved searches and announcements setting from the old subscription to the new one.
+ */
+function push_renew(): void
+{
+    rate_limit('push', 120, 600);
+    $in = json_body();
+    try {
+        $sid = upsert_subscription((array) ($in['subscription'] ?? []), current_user()['id'] ?? null);
+    } catch (InvalidArgumentException) {
+        json_out(['ok' => false, 'error' => t('push_unsupported')], 422);
+    }
+    $old = db()->prepare('SELECT id, site_news FROM push_subscriptions WHERE endpoint = ? AND id != ?');
+    $old->execute([(string) ($in['old_endpoint'] ?? ''), $sid]);
+    if ($o = $old->fetch()) {
+        $pdo = db();
+        $pdo->exec('BEGIN IMMEDIATE');
+        $pdo->prepare('INSERT OR IGNORE INTO office_follows (subscription_id, office_id, created_at) SELECT ?, office_id, created_at FROM office_follows WHERE subscription_id = ?')
+            ->execute([$sid, $o['id']]);
+        $pdo->prepare('INSERT OR IGNORE INTO saved_searches (subscription_id, filters, label, hits, created_at) SELECT ?, filters, label, hits, created_at FROM saved_searches WHERE subscription_id = ?')
+            ->execute([$sid, $o['id']]);
+        $pdo->prepare('UPDATE notifications SET subscription_id = ? WHERE subscription_id = ?')->execute([$sid, $o['id']]);
+        $pdo->prepare('UPDATE push_subscriptions SET site_news = MAX(site_news, ?) WHERE id = ?')->execute([(int) $o['site_news'], $sid]);
+        $pdo->prepare('DELETE FROM push_subscriptions WHERE id = ?')->execute([$o['id']]);
+        $pdo->exec('COMMIT');
+    }
+    json_out(['ok' => true]);
+}
+
+/** "Send me a test": push one notification to this device right now and report what the push service said. */
+function push_test(): void
+{
+    rate_limit('push-test', 10, 600);
+    $stmt = db()->prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint = ?');
+    $stmt->execute([(string) (json_body()['endpoint'] ?? '')]);
+    $sub = $stmt->fetch();
+    if (!$sub) {
+        json_out(['ok' => false, 'error' => t('push_test_nosub')], 404);
+    }
+    $base = absolute_base_url();
+    $res = push_send_many([$sub], [
+        'title' => t('push_test_title'),
+        'body'  => t('push_test_body'),
+        'url'   => $base . '/notifications',
+        'icon'  => $base . '/assets/img/icon-192.png',
+        'badge' => $base . '/assets/img/badge-72.png',
+        'tag'   => 'test',
+        'dir'   => 'auto',
+    ]);
+    if ($res['gone']) {
+        db()->exec('DELETE FROM push_subscriptions WHERE id IN (' . implode(',', array_map('intval', $res['gone'])) . ')');
+    }
+    $sent = $res['sent'] > 0;
+    json_out(['ok' => $sent, 'message' => $sent ? t('push_test_sent') : t('push_test_failed', ['why' => $res['error'] ?? '?']), 'gone' => (bool) $res['gone']], $sent ? 200 : 502);
+}
+
 /** Save the current search as an alert for this device. */
 function push_search_save(): void
 {
@@ -123,10 +180,19 @@ function push_status(): void
     $stmt->execute([$sub['id']]);
     $searches = array_map(static function ($s) {
         $f = json_decode((string) $s['filters'], true) ?: [];
-        return ['id' => (int) $s['id'], 'label' => search_label($f), 'hits' => (int) $s['hits'], 'url' => url('properties', $f)];
+        return ['id' => (int) $s['id'], 'label' => search_label($f), 'hits' => (int) $s['hits'], 'url' => url('properties', $f), 'filters_empty' => !$f];
     }, $stmt->fetchAll());
 
-    json_out(['ok' => true, 'subscribed' => true, 'site_news' => (bool) $sub['site_news'], 'offices' => $offices, 'feed' => $feed, 'searches' => $searches]);
+    // A saved search with no filters is the "every new listing" switch; it is shown as that switch, not in the list.
+    $all = null;
+    foreach ($searches as $i => $s) {
+        if ($s['filters_empty']) {
+            $all = $s['id'];
+        }
+        unset($searches[$i]['filters_empty']);
+    }
+    $searches = array_values(array_filter($searches, static fn($s) => $s['id'] !== $all));
+    json_out(['ok' => true, 'subscribed' => true, 'site_news' => (bool) $sub['site_news'], 'all_listings' => $all, 'offices' => $offices, 'feed' => $feed, 'searches' => $searches]);
 }
 
 function follower_count(int $officeId): int
