@@ -104,7 +104,7 @@ $useMap = $useMap ?? false;
     'no_follows' => t('no_follows'), 'no_feed' => t('no_feed'), 'unfollow' => t('unfollow'),
     'view' => t('view'), 'beds_short' => t('beds_short'), 'sqm' => t('sqm'), 'map_empty' => t('map_empty'),
     'alert_on' => t('alert_on'), 'delete' => t('delete'), 'no_searches' => t('no_searches'),
-    'loc_insecure' => t('loc_insecure'), 'loc_unavailable' => t('loc_unavailable'), 'loc_denied' => t('loc_denied'),
+    'loc_insecure' => t('loc_insecure'), 'loc_blocked' => t('loc_blocked'), 'loc_off' => t('loc_off'), 'loc_help_ios' => t('loc_help_ios'), 'loc_help_android' => t('loc_help_android'), 'loc_unavailable' => t('loc_unavailable'), 'loc_denied' => t('loc_denied'),
     'loc_timeout' => t('loc_timeout'), 'loc_set' => t('loc_set'), 'near_none' => t('near_none'), 'pick_city' => t('pick_city'),
     'locate_me' => t('locate_me'), 'search_this_area' => t('search_this_area'),
     'recently_viewed' => t('recently_viewed'), 'clear' => t('reset'), 'offline_now' => t('offline_now'), 'online_now' => t('online_now'),
