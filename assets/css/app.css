@@ -1224,7 +1224,6 @@ dialog:modal { overscroll-behavior: contain; }
 .legal-body h2:first-of-type { margin-block-start: 12px; }
 .legal-body ul { padding-inline-start: 1.3em; display: grid; gap: 6px; }
 .legal-body p + p { margin-block-start: 8px; }
-.legal-review { padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--text); font-weight: 600; font-size: .9rem; }
 .legal-table { margin-block: 8px; }
 .danger-details > summary { list-style: none; }
 .danger-details > summary::-webkit-details-marker { display: none; }
@@ -1255,3 +1254,38 @@ dialog:modal { overscroll-behavior: contain; }
     border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.65); color: #fff; font-size: 1.4rem; line-height: 1; cursor: pointer;
 }
 .preview-remove:focus-visible { outline: 3px solid #fff; outline-offset: 1px; }
+
+/* Upload progress */
+.upload-progress { margin-block: 12px; }
+.upload-progress progress { inline-size: 100%; block-size: 10px; accent-color: var(--brand); }
+
+/* Stale listing check */
+.status-expired { background: var(--surface-2); color: var(--text-muted); }
+.stale-panel { border-inline-start: 4px solid var(--accent); }
+.stale-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.stale-list li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding-block: 8px; border-block-start: 1px solid var(--border); }
+
+/* Price drop */
+.badge-drop { background: #b91c1c; color: #fff; }
+.price-was { font-size: 0.95rem; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
+.price-was .badge { vertical-align: middle; }
+.small-heading { font-size: 0.95rem; margin-block: 16px 8px; }
+.backup-list { list-style: none; padding: 0; margin: 0; }
+.backup-list li { display: flex; align-items: center; gap: 12px; padding-block: 4px; }
+.backup-list li form { margin-inline-start: auto; }
+.amount-input { inline-size: 11ch; min-block-size: 36px; padding-block: 4px; }
+.payments-panel details { margin-block-start: 8px; }
+.payments-panel summary { cursor: pointer; font-weight: 600; }
+
+/* Two-step login */
+.qr-box { inline-size: min(240px, 70vw); aspect-ratio: 1; }
+.qr-svg { inline-size: 100%; block-size: 100%; display: block; border-radius: 8px; }
+.qr-svg .qr-bg { fill: #fff; }
+.qr-svg .qr-fg { fill: #000; }
+.secret-key code { font: 600 1rem/1.4 ui-monospace, monospace; letter-spacing: 0.05em; word-break: break-all; }
+.otp-input { font: 700 1.4rem/1 ui-monospace, monospace; letter-spacing: 0.3em; text-align: center; max-inline-size: 16ch; }
+.recovery-codes { columns: 2; gap: 24px; font: 600 1.05rem/2 ui-monospace, monospace; padding-inline-start: 1.6em; }
+
+/* Neighbourhood editor */
+.district-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.district-edit input { inline-size: 14ch; min-block-size: 36px; padding-block: 4px; }

@@ -445,9 +445,73 @@ function notify_listing_published(array $p): void
     }
 }
 
+/** Send one message to these subscription rows (id, endpoint, p256dh, auth); expired devices are removed. */
+function push_to_subscriptions(array $subs, array $message): int
+{
+    if (!$subs || !vapid_keys()) {
+        return 0;
+    }
+    $base = absolute_base_url();
+    $message += ['badge' => $base . '/assets/img/badge-72.png', 'icon' => $base . '/assets/img/icon-192.png', 'dir' => 'auto'];
+    $res = push_send_many(array_values($subs), $message);
+    if ($res['gone']) {
+        db()->exec('DELETE FROM push_subscriptions WHERE id IN (' . implode(',', array_map('intval', $res['gone'])) . ')');
+    }
+    return (int) $res['sent'];
+}
+
+/** Every device where this user turned on notifications while signed in. */
+function push_to_user(int $userId, array $message): int
+{
+    $st = db()->prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?');
+    $st->execute([$userId]);
+    return push_to_subscriptions($st->fetchAll(), $message);
+}
+
+/** Price lowered: tell people who saved the listing and people whose saved search matches (one push per device). */
+function notify_price_drop(int $propertyId, int $oldUsd, int $newUsd): void
+{
+    try {
+        $p = find_property($propertyId);
+        if (!$p || $p['status'] !== 'published') {
+            return;
+        }
+        $targets = [];
+        $st = db()->prepare('SELECT s.id, s.endpoint, s.p256dh, s.auth FROM favorites f JOIN push_subscriptions s ON s.user_id = f.user_id
+            WHERE f.property_id = ? AND f.user_id != ?');
+        $st->execute([$propertyId, $p['user_id']]);
+        foreach ($st->fetchAll() as $r) {
+            $targets[(int) $r['id']] = $r;
+        }
+        foreach (db()->query('SELECT ss.filters, s.id, s.endpoint, s.p256dh, s.auth FROM saved_searches ss JOIN push_subscriptions s ON s.id = ss.subscription_id') as $r) {
+            $f = json_decode((string) $r['filters'], true);
+            if (!isset($targets[(int) $r['id']]) && is_array($f) && listing_matches_filters($p, search_filters($f))) {
+                $targets[(int) $r['id']] = $r;
+            }
+        }
+        if (!$targets) {
+            return;
+        }
+        $base = absolute_base_url();
+        $pct = (int) round((1 - $newUsd / max(1, $oldUsd)) * 100);
+        push_to_subscriptions(array_map(static fn($r) => ['id' => $r['id'], 'endpoint' => $r['endpoint'], 'p256dh' => $r['p256dh'], 'auth' => $r['auth']], $targets), [
+            'title' => t('push_price_drop', ['pct' => $pct]),
+            'body'  => $p['title'] . ' — ' . price_label($p),
+            'url'   => $base . '/property/' . $propertyId,
+            'image' => $p['cover_thumb'] ? $base . '/uploads/' . $p['cover_thumb'] : null,
+            'tag'   => 'drop' . $propertyId,
+        ]);
+    } catch (Throwable $e) {
+        error_log('aqarat notify_price_drop: ' . $e->getMessage());
+    }
+}
+
 /** Does a property satisfy a (normalised) search filter set? Mirrors search_where(). */
 function listing_matches_filters(array $p, array $f): bool
 {
+    if (!empty($f['district']) && (int) ($p['district_id'] ?? 0) !== (int) $f['district']) {
+        return false;
+    }
     if ($p['status'] !== 'published') {
         return false;
     }
@@ -501,6 +565,9 @@ function search_label(array $f): string
     if (!empty($f['city'])) {
         foreach (cities() as $c) {
             if ((int) $c['id'] === (int) $f['city']) { $parts[] = city_name($c); }
+        }
+        foreach (districts_by_city()[(int) $f['city']] ?? [] as $d) {
+            if (!empty($f['district']) && (int) $d['id'] === (int) $f['district']) { $parts[] = district_name($d); }
         }
     }
     if (isset($f['min_price']) && isset($f['max_price'])) { $parts[] = money((int) $f['min_price']) . '–' . money((int) $f['max_price']); }

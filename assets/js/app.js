@@ -88,6 +88,16 @@
         }, { once: true });
     }
 
+    /* ---------- Count WhatsApp / Call taps for the office's stats (beacon: never delays the tap) ---------- */
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest?.('[data-track-contact]');
+        if (!a || !navigator.sendBeacon) return;
+        const fd = new FormData();
+        fd.append('_csrf', CSRF);
+        fd.append('kind', a.dataset.trackContact);
+        navigator.sendBeacon(a.dataset.trackUrl, fd);
+    });
+
     /* ---------- Service worker ---------- */
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -224,6 +234,57 @@
             else { await navigator.clipboard.writeText(location.href); toast(tr('link_copied')); }
         } catch { /* cancelled */ }
     }));
+
+    /* ---------- QR code for the authenticator app (drawn as SVG paths: no inline styles, CSP-safe) ---------- */
+    const qrBox = $('[data-qr]');
+    if (qrBox && typeof window.qrcode === 'function') {
+        const qr = window.qrcode(0, 'M');
+        qr.addData(qrBox.dataset.qr);
+        qr.make();
+        const n = qr.getModuleCount(), m = 4;
+        let d = '';
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('viewBox', `0 0 ${n + 2 * m} ${n + 2 * m}`);
+        svg.setAttribute('class', 'qr-svg');
+        svg.setAttribute('aria-hidden', 'true');
+        const bg = document.createElementNS(NS, 'rect');
+        bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%'); bg.setAttribute('class', 'qr-bg');
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', d); path.setAttribute('class', 'qr-fg');
+        svg.append(bg, path);
+        qrBox.replaceChildren(svg);
+    }
+
+    /* ---------- Neighbourhoods follow the chosen city (filters: a select; listing form: suggestions) ---------- */
+    $$('[data-districts]').forEach((target) => {
+        let map = {};
+        try { map = JSON.parse(target.dataset.districts); } catch { return; }
+        const city = document.getElementById(target.dataset.citySelect);
+        if (!city) return;
+        const fill = () => {
+            const list = map[city.value] || [];
+            if (target.tagName === 'SELECT') {
+                const keep = target.value;
+                target.replaceChildren(target.options[0], ...list.map(([id, name]) => el('option', { value: id, selected: String(id) === keep }, name)));
+                const field = target.closest('[data-district-field]');
+                if (field) field.hidden = !list.length;
+                if (!list.some(([id]) => String(id) === keep)) target.value = '';
+            } else {
+                const dl = document.getElementById(target.getAttribute('list'));
+                if (dl) dl.replaceChildren(...list.map(([, name]) => el('option', { value: name })));
+            }
+        };
+        city.addEventListener('change', fill);
+        if (target.tagName !== 'SELECT') fill();
+    });
+
+    /* ---------- Buttons that need a quick "are you sure?" ---------- */
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest?.('[data-confirm-click]');
+        if (b && !window.confirm(b.dataset.confirmClick)) e.preventDefault();
+    });
 
     /* ---------- Copy to clipboard (activation codes) ---------- */
     $$('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
@@ -362,6 +423,100 @@
             e.preventDefault();
             if (canMerge) add(e.dataTransfer.files);
         });
+
+        /* Publish: shrink big photos on the phone, then upload with a progress bar. */
+        const form = dz.closest('form[data-upload-form]');
+        const prog = form && $('[data-upload-progress]', form);
+        const MAX_SIDE = 2400;
+        const fileLimit = Number(form?.dataset.fileLimit) || maxBytes;
+        const postLimit = Number(form?.dataset.postLimit) || 0;   // 0 = server has no total limit
+        // Re-encode until the photo fits its share of what this server accepts: lower quality first, then size.
+        const STEPS = [[2400, 0.86], [2400, 0.78], [2000, 0.74], [1600, 0.7], [1280, 0.66]];
+        const shrink = async (f, budget) => {
+            if (!/^image\/(jpeg|png|webp)$/.test(f.type) || isHeic(f)) return f;
+            const url = URL.createObjectURL(f);
+            try {
+                const img = new Image();
+                img.src = url;
+                await img.decode();                       // browsers apply the photo's EXIF rotation here
+                const w = img.naturalWidth, h = img.naturalHeight;
+                if (Math.max(w, h) <= MAX_SIDE && f.size <= Math.min(budget, 1.5 * 1048576)) return f;
+                let best = f;
+                for (const [side, q] of STEPS) {
+                    const k = Math.min(1, side / Math.max(w, h));
+                    const c = document.createElement('canvas');
+                    c.width = Math.round(w * k);
+                    c.height = Math.round(h * k);
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#fff';               // transparent PNG → white, not black
+                    ctx.fillRect(0, 0, c.width, c.height);
+                    ctx.drawImage(img, 0, 0, c.width, c.height);
+                    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', q));
+                    if (blob && blob.size < best.size) best = new File([blob], f.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: f.lastModified });
+                    if (best.size <= budget) break;
+                }
+                return best;
+            } catch {
+                return f;                                 // can't decode here: let the server decide
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        };
+        if (form && prog && canMerge && 'FormData' in window) {
+            const bar = $('progress', prog);
+            const text = $('[data-upload-text]', prog);
+            const btn = $('.form-footer button[type=submit]', form);
+            let busy = false;
+            form.addEventListener('submit', async (e) => {
+                if (e.defaultPrevented) return;           // validation already stopped it
+                e.preventDefault();
+                if (busy) return;
+                busy = true;
+                btn.disabled = true;
+                prog.hidden = false;
+                bar.removeAttribute('value');             // indeterminate while preparing
+                const fd = new FormData(form);
+                fd.delete('images[]');
+                // Each photo's budget: the per-file limit, and an equal share of the total request limit
+                // (after videos and the text fields), so the whole form always fits.
+                let others = 64 * 1024;
+                for (const [, v] of fd.entries()) if (v instanceof File) others += v.size;
+                const share = postLimit && picked.length ? Math.floor((postLimit * 0.95 - others) / picked.length) : Infinity;
+                const budget = Math.max(150 * 1024, Math.min(fileLimit * 0.97, share));
+                for (let i = 0; i < picked.length; i++) {
+                    text.textContent = tr('preparing_photos', { n: i + 1, total: picked.length });
+                    fd.append('images[]', await shrink(picked[i], budget));
+                }
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', form.action);
+                xhr.setRequestHeader('X-AQ-Upload', '1');
+                xhr.upload.onprogress = (ev) => {
+                    if (!ev.lengthComputable) return;
+                    const pct = Math.round((ev.loaded / ev.total) * 100);
+                    bar.value = pct;
+                    text.textContent = pct < 100 ? tr('uploading_pct', { pct }) : tr('saving');
+                };
+                const fail = () => {
+                    busy = false;
+                    btn.disabled = false;
+                    bar.value = 0;
+                    text.textContent = tr('upload_failed');
+                };
+                xhr.onerror = fail;
+                xhr.ontimeout = fail;
+                xhr.onload = () => {
+                    let data = null;
+                    try { data = JSON.parse(xhr.responseText); } catch { /* an error page */ }
+                    if (data && data.redirect) { location.href = data.redirect; return; }
+                    if (xhr.status >= 200 && xhr.status < 600 && xhr.responseText) {
+                        document.open(); document.write(xhr.responseText); document.close();   // show the server's page
+                        return;
+                    }
+                    fail();
+                };
+                xhr.send(fd);
+            });
+        }
     }
 
     /* ---------- Video: recorded clips join the chosen ones ---------- */

@@ -1,8 +1,7 @@
-<p class="legal-review">[CLIENT/LAWYER: review] — draft terms. Replace bracketed items and have them checked before launch.</p>
 <p class="muted">Last updated: <?= e($updated) ?></p>
 
 <h2>The service</h2>
-<p><?= e(app_name()) ?>, operated by [CLIENT: legal name], is a platform where real estate offices and owners publish property listings and people contact them. We are not a party to any sale or rental and do not handle payments.</p>
+<p><?= e(app_name()) ?> is a platform where real estate offices publish property listings and people contact them. We are not a party to any sale or rental and do not handle payments between buyers and offices.</p>
 
 <h2>Listings</h2>
 <ul>
@@ -27,5 +26,5 @@
 <p>Check every property, its title deed and the advertiser yourself before paying anything. To the extent the law allows, we are not liable for listings, for agreements between users, or for temporary unavailability of the service.</p>
 
 <h2>Law</h2>
-<p>These terms are governed by the laws applicable in the Kurdistan Region of Iraq. [CLIENT/LAWYER: confirm jurisdiction]. Changes are announced on this page with a new date.</p>
+<p>These terms are governed by the laws applicable in the Kurdistan Region of Iraq. Changes are announced on this page with a new date.</p>
 <p>Contact: <a href="mailto:<?= e($email) ?>" dir="ltr"><?= e($email) ?></a></p>

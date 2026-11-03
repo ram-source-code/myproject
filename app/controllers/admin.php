@@ -153,6 +153,97 @@ function admin_city_create(): void
     redirect(url('admin/cities'));
 }
 
+/* ───────────── Neighbourhoods per city ───────────── */
+
+function admin_districts(int $cityId): void
+{
+    require_admin();
+    $c = db()->prepare('SELECT * FROM cities WHERE id = ?');
+    $c->execute([$cityId]);
+    $city = $c->fetch() ?: abort(404);
+    $items = db()->prepare('SELECT d.*, (SELECT COUNT(*) FROM properties p WHERE p.district_id = d.id) n FROM districts d WHERE d.city_id = ? ORDER BY d.name_en');
+    $items->execute([$cityId]);
+    // What offices typed that isn't on the list yet, most used first
+    $sug = db()->prepare("SELECT MIN(trim(district)) district, COUNT(*) n FROM properties
+        WHERE city_id = ? AND district_id IS NULL AND trim(district) != '' GROUP BY lower(trim(district)) ORDER BY n DESC LIMIT 30");
+    $sug->execute([$cityId]);
+    render('admin/districts', [
+        'pageTitle' => t('districts_of', ['city' => city_name($city)]) . ' — ' . app_name(),
+        'city' => $city, 'items' => $items->fetchAll(), 'suggest' => $sug->fetchAll(), 'active' => 'admin_cities',
+    ]);
+}
+
+function admin_district_create(): void
+{
+    require_admin();
+    $cityId = (int) input_int('city_id');
+    [$ku, $ar, $en] = district_names_input();
+    if ($en === '' || !$cityId) {
+        with_old(['name_ku' => $ku, 'name_ar' => $ar], ['name_en' => t('v_required')]);
+        redirect(url('admin/cities/' . $cityId . '/districts'));
+    }
+    $st = db()->prepare('INSERT OR IGNORE INTO districts (city_id, name_ku, name_ar, name_en) VALUES (?,?,?,?)');
+    $st->execute([$cityId, $ku ?: $en, $ar ?: $en, $en]);
+    if ($st->rowCount()) {
+        $id = (int) db()->lastInsertId();
+        $n = link_district_listings($id, $cityId, [$ku, $ar, $en]);
+        admin_log('district.add', $en);
+        flash('success', t('district_added', ['n' => $n]));
+    } else {
+        flash('error', t('district_exists'));
+    }
+    redirect(url('admin/cities/' . $cityId . '/districts'));
+}
+
+function admin_district_update(int $id): void
+{
+    require_admin();
+    $d = db()->prepare('SELECT * FROM districts WHERE id = ?');
+    $d->execute([$id]);
+    $row = $d->fetch() ?: abort(404);
+    [$ku, $ar, $en] = district_names_input();
+    if ($en !== '') {
+        try {
+            db()->prepare('UPDATE districts SET name_ku = ?, name_ar = ?, name_en = ? WHERE id = ?')->execute([$ku ?: $en, $ar ?: $en, $en, $id]);
+            link_district_listings($id, (int) $row['city_id'], [$ku, $ar, $en]);
+            flash('success', t('saved'));
+        } catch (PDOException) {
+            flash('error', t('district_exists'));
+        }
+    }
+    redirect(url('admin/cities/' . $row['city_id'] . '/districts'));
+}
+
+function admin_district_delete(int $id): void
+{
+    require_admin();
+    $d = db()->prepare('SELECT city_id, name_en FROM districts WHERE id = ?');
+    $d->execute([$id]);
+    $row = $d->fetch() ?: abort(404);
+    db()->prepare('DELETE FROM districts WHERE id = ?')->execute([$id]);      // listings keep the typed name
+    admin_log('district.delete', $row['name_en']);
+    flash('success', t('district_deleted'));
+    redirect(url('admin/cities/' . $row['city_id'] . '/districts'));
+}
+
+function district_names_input(): array
+{
+    return array_map(static fn($k) => mb_substr(trim((string) preg_replace('/\s+/u', ' ', input($k))), 0, 80), ['name_ku', 'name_ar', 'name_en']);
+}
+
+/** Attach existing listings in this city whose typed neighbourhood matches one of the names. */
+function link_district_listings(int $districtId, int $cityId, array $names): int
+{
+    $names = array_values(array_unique(array_filter(array_map(static fn($n) => mb_strtolower(trim($n)), $names))));
+    if (!$names) {
+        return 0;
+    }
+    $st = db()->prepare('UPDATE properties SET district_id = ? WHERE city_id = ? AND district_id IS NULL AND lower(trim(district)) IN ('
+        . implode(',', array_fill(0, count($names), '?')) . ')');
+    $st->execute([$districtId, $cityId, ...$names]);
+    return $st->rowCount();
+}
+
 function admin_city_delete(int $id): void
 {
     require_admin();
@@ -173,7 +264,13 @@ function admin_offices(): void
             ELSE 3 END, o.active_until, o.created_at DESC LIMIT 500")->fetchAll();
     $done = $_SESSION['_activated'] ?? null;
     unset($_SESSION['_activated']);
-    render('admin/offices', ['pageTitle' => t('offices') . ' — ' . app_name(), 'items' => $rows, 'done' => $done, 'active' => 'admin_offices']);
+    $payMonth = ['n' => 0];
+    foreach (db()->query("SELECT currency, SUM(amount) total, COUNT(*) n FROM payments WHERE created_at >= datetime('now', 'start of month') GROUP BY currency") as $r) {
+        $payMonth[$r['currency']] = (int) $r['total'];
+        $payMonth['n'] += (int) $r['n'];
+    }
+    $payments = db()->query('SELECT * FROM payments ORDER BY id DESC LIMIT 50')->fetchAll();
+    render('admin/offices', ['pageTitle' => t('offices') . ' — ' . app_name(), 'items' => $rows, 'done' => $done, 'payMonth' => $payMonth, 'payments' => $payments, 'active' => 'admin_offices']);
 }
 
 function admin_office_verify(int $id): void
@@ -204,6 +301,11 @@ function admin_office_activate(int $id): void
             ->execute([$months, $id]);
     }
     admin_log('office.activate', "#$id " . ($months ? "{$months}m" : 'no end'));
+    $amount = max(0, (int) convert_arabic_digits((string) ($_POST['amount'] ?? '')));
+    if ($amount > 0) {
+        db()->prepare('INSERT INTO payments (office_id, office_name, amount, currency, months, created_by) VALUES (?,?,?,?,?,?)')
+            ->execute([$id, $o['name'], $amount, input('currency') === 'USD' ? 'USD' : 'IQD', $months, current_user()['id']]);
+    }
     $o = find_office($id);
     $until = $o['active_until'] ? substr($o['active_until'], 0, 10) : null;
     $message = t($until ? 'activated_message_until' : 'activated_message', [
@@ -319,6 +421,25 @@ function admin_duplicate_dismiss(int $a, int $b): void
 
 
 /** Consistent SQLite snapshot (VACUUM INTO works while the site is live, even in WAL mode), streamed as a download. */
+/** Download one of the automatic daily backups (name strictly validated: no path tricks). */
+function admin_backup_download(): void
+{
+    require_admin();
+    $name = (string) ($_POST['file'] ?? '');
+    $file = backups_dir() . '/' . $name;
+    if (!preg_match('/^aqarat-\d{4}-\d{2}-\d{2}\.sqlite$/', $name) || !is_file($file)) {
+        abort(404);
+    }
+    admin_log('backup.download', $name);
+    @set_time_limit(300);
+    header('Content-Type: application/vnd.sqlite3');
+    header('Content-Disposition: attachment; filename="' . $name . '"');
+    header('Content-Length: ' . filesize($file));
+    header('Cache-Control: no-store');
+    readfile($file);
+    exit;
+}
+
 function admin_backup(): void
 {
     require_admin();

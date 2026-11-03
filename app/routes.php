@@ -32,6 +32,7 @@ function routes(): array
         ['GET',  '/api/nearby',                         'api_nearby'],
         ['GET',  '/api/recommend',                      'api_recommend'],
         ['POST', '/property/(\d+)/view',                'property_view_beacon'],
+        ['POST', '/property/(\d+)/contact',             'property_contact_beacon'],
         ['GET',  '/manifest',                           'pwa_manifest'],   // extension-less: front proxies never treat it as a static file
         ['GET',  '/manifest.webmanifest',               'pwa_manifest'],
         ['GET',  '/offline',                            'offline_page'],
@@ -47,6 +48,8 @@ function routes(): array
 
         ['GET',  '/login',                              'login_form'],
         ['POST', '/login',                              'login_submit'],
+        ['GET',  '/login/code',                         'login_code_form'],
+        ['POST', '/login/code',                         'login_code_submit'],
         ['GET',  '/register',                           'register_form'],
         ['POST', '/register',                           'register_submit'],
         ['POST', '/logout',                             'logout_submit'],
@@ -58,12 +61,19 @@ function routes(): array
         ['POST', '/dashboard/properties/(\d+)',         'dash_property_update'],
         ['POST', '/dashboard/properties/(\d+)/delete',  'dash_property_delete'],
         ['POST', '/dashboard/properties/(\d+)/sold',    'dash_property_sold'],
+        ['POST', '/dashboard/properties/(\d+)/confirm', 'dash_property_confirm'],
+        ['POST', '/dashboard/properties/confirm-all',   'dash_property_confirm_all'],
         ['POST', '/dashboard/images/(\d+)/delete',      'dash_image_delete'],
         ['POST', '/dashboard/images/(\d+)/cover',       'dash_image_cover'],
         ['POST', '/dashboard/videos/(\d+)/delete',      'dash_video_delete'],
         ['GET',  '/dashboard/favorites',                'dash_favorites'],
         ['GET',  '/dashboard/inquiries',                'dash_inquiries'],
         ['POST', '/dashboard/inquiries/(\d+)/read',     'dash_inquiry_read'],
+        ['GET',  '/dashboard/2fa',                      'dash_2fa_setup'],
+        ['POST', '/dashboard/2fa',                      'dash_2fa_enable'],
+        ['GET',  '/dashboard/2fa/codes',                'dash_2fa_codes'],
+        ['POST', '/dashboard/2fa/new-codes',            'dash_2fa_new_codes'],
+        ['POST', '/dashboard/2fa/disable',              'dash_2fa_disable'],
         ['GET',  '/dashboard/office',                   'dash_office'],
         ['POST', '/dashboard/office',                   'dash_office_save'],
         ['GET',  '/dashboard/notifications',            'dash_notifications'],
@@ -74,6 +84,7 @@ function routes(): array
         ['GET',  '/dashboard/export',                   'dash_export'],
         ['POST', '/dashboard/delete-account',           'dash_delete_account'],
         ['POST', '/admin/backup',                       'admin_backup'],
+        ['POST', '/admin/backups/download',             'admin_backup_download'],
         ['GET',  '/privacy',                            'privacy_page'],
         ['GET',  '/terms',                              'terms_page'],
 
@@ -95,6 +106,10 @@ function routes(): array
         ['GET',  '/admin/cities',                       'admin_cities'],
         ['POST', '/admin/cities',                       'admin_city_create'],
         ['POST', '/admin/cities/(\d+)/delete',          'admin_city_delete'],
+        ['GET',  '/admin/cities/(\d+)/districts',       'admin_districts'],
+        ['POST', '/admin/districts',                    'admin_district_create'],
+        ['POST', '/admin/districts/(\d+)',              'admin_district_update'],
+        ['POST', '/admin/districts/(\d+)/delete',       'admin_district_delete'],
     ];
 }
 

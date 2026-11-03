@@ -12,9 +12,11 @@ const PROPERTY_SELECT = "
            o.is_verified AS office_verified, o.phone AS office_phone, o.whatsapp AS office_whatsapp,
            (SELECT thumb FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_thumb,
            (SELECT color FROM property_images i WHERE i.property_id = p.id ORDER BY sort_order, id LIMIT 1) AS cover_color,
-           (SELECT COUNT(*) FROM property_images i WHERE i.property_id = p.id) AS image_count
+           (SELECT COUNT(*) FROM property_images i WHERE i.property_id = p.id) AS image_count,
+           dd.name_ku AS district_ku, dd.name_ar AS district_ar, dd.name_en AS district_en
     FROM properties p
     LEFT JOIN cities c ON c.id = p.city_id
+    LEFT JOIN districts dd ON dd.id = p.district_id
     JOIN users u ON u.id = p.user_id
     LEFT JOIN offices o ON o.user_id = p.user_id
 ";
@@ -45,6 +47,7 @@ function search_filters(array $src): array
         'furnished' => !empty($src['furnished']) ? 1 : null,
         'deed'      => in_array($src['deed'] ?? '', DEED_TYPES, true) ? $src['deed'] : '',
         'office'    => input_int('office', null, $src),
+        'district'  => input_int('district', null, $src),
         'sort'      => in_array($src['sort'] ?? '', ['newest', 'nearest', 'price_asc', 'price_desc', 'area_desc', 'popular'], true) ? $src['sort'] : 'newest',
         'near'      => '',
         'r'         => null,
@@ -72,7 +75,7 @@ function search_where(array $f): array
         $where[] = 'p.id IN (SELECT rowid FROM properties_fts WHERE properties_fts MATCH ?)';
         $args[] = $m;
     }
-    foreach (['purpose' => 'p.purpose = ?', 'type' => 'p.type = ?', 'city' => 'p.city_id = ?'] as $k => $sql) {
+    foreach (['purpose' => 'p.purpose = ?', 'type' => 'p.type = ?', 'city' => 'p.city_id = ?', 'district' => 'p.district_id = ?'] as $k => $sql) {
         if (!empty($f[$k])) {
             $where[] = $sql;
             $args[] = $f[$k];
@@ -425,4 +428,61 @@ function delete_property(int $id): void
     foreach ($imgs as $img) {
         delete_image_files($img);
     }
+}
+
+/** Neighbourhoods of one city (or all, keyed by city id) — small lists, read once per request. */
+function districts_by_city(): array
+{
+    static $all = null;
+    if ($all === null) {
+        $all = [];
+        foreach (db()->query('SELECT * FROM districts ORDER BY name_en') as $d) {
+            $all[(int) $d['city_id']][] = $d;
+        }
+    }
+    return $all;
+}
+
+/** The district row whose name (in any language, any letter case) matches what the office typed, or null. */
+function match_district(?int $cityId, string $typed): ?array
+{
+    $t = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $typed)));
+    if (!$cityId || $t === '') {
+        return null;
+    }
+    foreach (districts_by_city()[$cityId] ?? [] as $d) {
+        foreach (['name_ku', 'name_ar', 'name_en'] as $k) {
+            if (mb_strtolower(trim($d[$k])) === $t) {
+                return $d;
+            }
+        }
+    }
+    return null;
+}
+
+/** Neighbourhood as the visitor reads it: the listed name in their language, else what the office typed. */
+function district_label(array $p): string
+{
+    if (!empty($p['district_en'])) {
+        return (string) match (lang()) { 'ckb' => $p['district_ku'] ?: $p['district_en'], 'ar' => $p['district_ar'] ?: $p['district_en'], default => $p['district_en'] };
+    }
+    return (string) ($p['district'] ?? '');
+}
+
+function district_name(array $d): string
+{
+    return (string) match (lang()) { 'ckb' => $d['name_ku'] ?: $d['name_en'], 'ar' => $d['name_ar'] ?: $d['name_en'], default => $d['name_en'] };
+}
+
+/** {cityId: [[id, name], …]} in the visitor's language — feeds the neighbourhood pickers. */
+function districts_json(): string
+{
+    $out = [];
+    foreach (districts_by_city() as $cid => $list) {
+        foreach ($list as $d) {
+            $out[$cid][] = [(int) $d['id'], district_name($d)];
+        }
+        usort($out[$cid], static fn($a, $b) => strcmp($a[1], $b[1]));
+    }
+    return json_encode((object) $out, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 }

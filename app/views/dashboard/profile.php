@@ -50,6 +50,27 @@
                 <div><button class="btn btn-primary" type="submit"><?= e(t('update_password')) ?></button></div>
             </form>
         </section>
+        <section class="panel stack" aria-labelledby="tf-h" id="twofa">
+            <h2 id="tf-h" class="panel-title"><?= e(t('twofa_title')) ?></h2>
+            <?php $tf = user_2fa((int) $u['id']); ?>
+            <?php if (!$tf): ?>
+                <p class="muted"><?= e(t('twofa_why')) ?><?php if ($u['role'] === 'admin'): ?> <strong><?= e(t('twofa_admin_recommended')) ?></strong><?php endif; ?></p>
+                <p><a class="btn btn-primary" href="<?= e(url('dashboard/2fa')) ?>"><svg aria-hidden="true"><use href="#i-key"></use></svg><?= e(t('twofa_set_up')) ?></a></p>
+            <?php else: ?>
+                <p><span class="status status-published"><?= e(t('twofa_is_on')) ?></span> <span class="muted small"><?= e(t('twofa_codes_left', ['n' => count((array) json_decode($tf['recovery_codes'], true))])) ?></span></p>
+                <form method="post" action="<?= e(url('dashboard/2fa/new-codes')) ?>" class="activation-form">
+                    <?= csrf_field() ?>
+                    <div class="field">
+                        <label for="tf-pw"><?= e(t('current_password')) ?></label>
+                        <input id="tf-pw" name="password" type="password" required autocomplete="current-password" dir="ltr"<?= field_aria('twofa_password') ?>>
+                        <?= field_error('twofa_password') ?>
+                    </div>
+                    <button class="btn btn-outline" type="submit"><?= e(t('twofa_new_codes')) ?></button>
+                    <button class="btn btn-ghost text-danger" type="submit" formaction="<?= e(url('dashboard/2fa/disable')) ?>" data-confirm-click="<?= e(t('twofa_off_confirm')) ?>"><?= e(t('twofa_turn_off')) ?></button>
+                </form>
+            <?php endif; ?>
+        </section>
+
         <section class="panel" aria-labelledby="data-h" id="delete">
             <h2 id="data-h" class="panel-title"><?= e(t('your_data')) ?></h2>
             <p class="muted"><?= e(t('your_data_desc')) ?> <a href="<?= e(url('privacy')) ?>"><?= e(t('privacy_policy')) ?></a></p>

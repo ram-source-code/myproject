@@ -33,6 +33,7 @@
                         <td data-label="<?= e(t('name_en')) ?>" lang="en"><?= e($c['name_en']) ?></td>
                         <td data-label="<?= e(t('admin_listings')) ?>"><?= (int) $c['n'] ?></td>
                         <td class="row-actions">
+                            <a class="btn btn-ghost btn-sm" href="<?= e(url('admin/cities/' . $c['id'] . '/districts')) ?>"><?= e(t('districts')) ?> (<?= count(districts_by_city()[(int) $c['id']] ?? []) ?>)<span class="visually-hidden">: <?= e($c['name_en']) ?></span></a>
                             <form method="post" action="<?= e(url('admin/cities/' . $c['id'] . '/delete')) ?>" data-confirm="<?= e(t('confirm_delete_city')) ?>">
                                 <?= csrf_field() ?>
                                 <button class="btn btn-ghost btn-sm text-danger" type="submit"><?= e(t('delete')) ?><span class="visually-hidden">: <?= e($c['name_en']) ?></span></button>

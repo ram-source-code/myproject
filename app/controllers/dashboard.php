@@ -22,6 +22,13 @@ function dashboard_home(): void
     $stmt = db()->prepare(PROPERTY_SELECT . " WHERE $where ORDER BY p.updated_at DESC LIMIT 200");
     $stmt->execute($args);
     $items = $stmt->fetchAll();
+    // Last 30 days, for every listing of this office (not only the rows on screen)
+    $mine = db()->prepare($u['role'] === 'admin' ? 'SELECT id FROM properties' : 'SELECT id FROM properties WHERE user_id = ?');
+    $mine->execute($u['role'] === 'admin' ? [] : [$u['id']]);
+    $month = listing_stats($mine->fetchAll(PDO::FETCH_COLUMN));
+    $check = db()->prepare("SELECT id, title, status, stale_since FROM properties WHERE user_id = ?
+        AND (status = 'expired' OR (status = 'published' AND stale_since IS NOT NULL)) ORDER BY status = 'expired' DESC, stale_since LIMIT 50");
+    $check->execute([$u['id']]);
 
     $s = db()->prepare("SELECT
         COUNT(*) total,
@@ -33,6 +40,8 @@ function dashboard_home(): void
     $s->execute([$u['id'], $u['id']]);
 
     render('dashboard/index', [
+        'needCheck' => $check->fetchAll(),
+        'month'     => $month,
         'pageTitle' => t('dashboard') . ' — ' . app_name(),
         'items'     => $items,
         'stats'     => $s->fetch(),
@@ -69,6 +78,7 @@ function dash_property_create(): void
     }
 
     $status = (config('require_approval') && !in_array($u['role'], ['admin'], true)) ? 'pending' : 'published';
+    $dist = match_district($d['city_id'], $d['district']);
     db()->prepare('INSERT INTO properties (user_id, city_id, title, description, purpose, type, district, address, project, price, currency, price_usd,
             rent_period, deed, area, bedrooms, bathrooms, floor, year_built, furnished, features, lat, lng, status)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
@@ -76,6 +86,7 @@ function dash_property_create(): void
             $d['price'], $d['currency'], $d['price_usd'], $d['rent_period'], $d['deed'], $d['area'], $d['bedrooms'], $d['bathrooms'], $d['floor'],
             $d['year_built'], $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status]);
     $id = (int) db()->lastInsertId();
+    db()->prepare("UPDATE properties SET district_id = ?, confirmed_at = datetime('now') WHERE id = ?")->execute([$dist['id'] ?? null, $id]);
 
     foreach (attach_uploaded_images($id, $files) as $msg) {
         flash('error', $msg);
@@ -127,8 +138,9 @@ function dash_property_update(int $id): void
         redirect(url("dashboard/properties/$id/edit"));
     }
 
+    // Editing confirms the listing is still available (and brings a hidden one back).
+    $status = $p['status'] === 'expired' ? 'published' : $p['status'];
     // Substantive edits by non-admins send a published listing back to review.
-    $status = $p['status'];
     if (config('require_approval') && $u['role'] !== 'admin' && in_array($status, ['published', 'rejected'], true)) {
         $status = 'pending';
     }
@@ -139,6 +151,21 @@ function dash_property_update(int $id): void
         ->execute([$d['city_id'], $d['title'], $d['description'], $d['purpose'], $d['type'], $d['district'], $d['address'], $d['project'],
             $d['price'], $d['currency'], $d['price_usd'], $d['rent_period'], $d['deed'], $d['area'], $d['bedrooms'], $d['bathrooms'], $d['floor'],
             $d['year_built'], $d['furnished'], $d['features'], $d['lat'], $d['lng'], $status, $id]);
+    $dist = match_district($d['city_id'], $d['district']);
+    db()->prepare("UPDATE properties SET confirmed_at = datetime('now'), stale_since = NULL, district_id = ? WHERE id = ?")->execute([$dist['id'] ?? null, $id]);
+
+    // Price drop: remember the old price (badge for 30 days) and tell people who are watching this listing.
+    $old = (int) $p['price_usd'];
+    $new = (int) $d['price_usd'];
+    if ($old > 0 && $new > 0 && $new < $old) {
+        db()->prepare("UPDATE properties SET prev_price_usd = ?, price_dropped_at = datetime('now') WHERE id = ?")->execute([$old, $id]);
+        $lastDrop = $p['price_dropped_at'] ? strtotime($p['price_dropped_at'] . ' UTC') : 0;
+        if ($status === 'published' && $lastDrop < time() - 3 * 86400) {      // no repeat alerts for a string of small cuts
+            notify_price_drop($id, $old, $new);
+        }
+    } elseif ($new > $old) {
+        db()->prepare('UPDATE properties SET prev_price_usd = NULL, price_dropped_at = NULL WHERE id = ?')->execute([$id]);
+    }
 
     foreach (attach_uploaded_images($id, normalize_files($_FILES['images'] ?? null)) as $msg) {
         flash('error', $msg);
@@ -164,12 +191,36 @@ function dash_property_sold(int $id): void
 {
     require_login();
     $p = owned_property_or_404($id);
-    if (!in_array($p['status'], ['published', 'sold'], true)) {
+    if (!in_array($p['status'], ['published', 'sold', 'expired'], true)) {
         abort(403);
     }
     $new = $p['status'] === 'sold' ? 'published' : 'sold';
-    db()->prepare("UPDATE properties SET status = ?, updated_at = datetime('now') WHERE id = ?")->execute([$new, $id]);
+    db()->prepare("UPDATE properties SET status = ?, stale_since = NULL, confirmed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")->execute([$new, $id]);
     flash('success', t('status_changed'));
+    back('/dashboard');
+}
+
+/** "Still available" — one tap from the reminder (also brings back a listing hidden for not being confirmed). */
+function dash_property_confirm(int $id): void
+{
+    require_poster();
+    $p = owned_property_or_404($id);
+    if (!in_array($p['status'], ['published', 'expired'], true)) {
+        abort(403);
+    }
+    db()->prepare("UPDATE properties SET status = 'published', confirmed_at = datetime('now'), stale_since = NULL, updated_at = datetime('now') WHERE id = ?")->execute([$id]);
+    flash('success', t('confirmed_available'));
+    back('/dashboard');
+}
+
+/** Confirm every listing waiting for a check, in one tap. */
+function dash_property_confirm_all(): void
+{
+    $u = require_poster();
+    $st = db()->prepare("UPDATE properties SET status = 'published', confirmed_at = datetime('now'), stale_since = NULL, updated_at = datetime('now')
+        WHERE user_id = ? AND (status = 'expired' OR (status = 'published' AND stale_since IS NOT NULL))");
+    $st->execute([$u['id']]);
+    flash('success', t('confirmed_n', ['n' => $st->rowCount()]));
     back('/dashboard');
 }
 
@@ -374,4 +425,93 @@ function dash_delete_account(): void
     logout_user();
     flash('success', t('account_deleted'));
     redirect(url('/'));
+}
+
+/* ───────────── Two-step login (authenticator app) ───────────── */
+
+function dash_2fa_setup(): void
+{
+    $u = require_login();
+    if (user_2fa((int) $u['id'])) {
+        redirect(url('dashboard/profile') . '#twofa');
+    }
+    $_SESSION['_2fa_setup'] ??= totp_new_secret();           // same secret on reload, until it is confirmed
+    render('dashboard/twofa', [
+        'pageTitle' => t('twofa_title') . ' — ' . app_name(),
+        'secret'    => $_SESSION['_2fa_setup'],
+        'uri'       => totp_uri($_SESSION['_2fa_setup'], $u['email']),
+        'useQr'     => true,
+        'active'    => 'profile',
+    ]);
+}
+
+function dash_2fa_enable(): void
+{
+    $u = require_login();
+    $secret = $_SESSION['_2fa_setup'] ?? '';
+    $step = $secret ? totp_verify($secret, (string) ($_POST['code'] ?? '')) : null;
+    if ($step === null) {
+        with_old([], ['code' => t('twofa_wrong')]);
+        redirect(url('dashboard/2fa'));
+    }
+    $codes = new_recovery_codes();
+    db()->prepare('UPDATE users SET totp_secret = ?, totp_last_step = ?, recovery_codes = ? WHERE id = ?')
+        ->execute([$secret, $step, json_encode(array_map('recovery_hash', $codes)), $u['id']]);
+    unset($_SESSION['_2fa_setup']);
+    if ($u['role'] === 'admin') {
+        admin_log('2fa.enable', '#' . $u['id']);
+    }
+    $_SESSION['_show_codes'] = $codes;
+    flash('success', t('twofa_on'));
+    redirect(url('dashboard/2fa/codes'));
+}
+
+/** Recovery codes are shown exactly once, right after they are made. */
+function dash_2fa_codes(): void
+{
+    $u = require_login();
+    $codes = $_SESSION['_show_codes'] ?? null;
+    unset($_SESSION['_show_codes']);
+    if (!$codes) {
+        redirect(url('dashboard/profile') . '#twofa');
+    }
+    render('dashboard/twofa_codes', ['pageTitle' => t('twofa_codes_title') . ' — ' . app_name(), 'codes' => $codes, 'active' => 'profile']);
+}
+
+function dash_2fa_new_codes(): void
+{
+    $u = require_login();
+    if (!user_2fa((int) $u['id']) || !twofa_password_ok((int) $u['id'])) {
+        redirect(url('dashboard/profile') . '#twofa');
+    }
+    $codes = new_recovery_codes();
+    db()->prepare('UPDATE users SET recovery_codes = ? WHERE id = ?')->execute([json_encode(array_map('recovery_hash', $codes)), $u['id']]);
+    $_SESSION['_show_codes'] = $codes;
+    redirect(url('dashboard/2fa/codes'));
+}
+
+function dash_2fa_disable(): void
+{
+    $u = require_login();
+    if (!twofa_password_ok((int) $u['id'])) {
+        redirect(url('dashboard/profile') . '#twofa');
+    }
+    db()->prepare("UPDATE users SET totp_secret = NULL, totp_last_step = 0, recovery_codes = '[]' WHERE id = ?")->execute([$u['id']]);
+    if ($u['role'] === 'admin') {
+        admin_log('2fa.disable', '#' . $u['id']);
+    }
+    flash('success', t('twofa_off'));
+    redirect(url('dashboard/profile') . '#twofa');
+}
+
+/** Changing two-step settings needs the current password (a borrowed unlocked phone is not enough). */
+function twofa_password_ok(int $userId): bool
+{
+    $st = db()->prepare('SELECT password_hash FROM users WHERE id = ?');
+    $st->execute([$userId]);
+    if (password_verify((string) ($_POST['password'] ?? ''), (string) $st->fetchColumn())) {
+        return true;
+    }
+    with_old([], ['twofa_password' => t('current_password_wrong')]);
+    return false;
 }
