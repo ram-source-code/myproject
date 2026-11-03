@@ -1,33 +1,16 @@
-<section class="hero">
+<section class="hero" aria-labelledby="hero-h">
     <div class="container hero-inner">
-        <p class="hero-kicker"><svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e(t('hero_kicker')) ?></p>
-        <h1 class="hero-title"><?= e(t('hero_title')) ?></h1>
-        <p class="hero-sub"><?= e(t('hero_sub')) ?></p>
+        <h1 id="hero-h" class="hero-title"><?= e(t('hero_question')) ?></h1>
+        <?php if ($topCities): ?>
+            <ul class="hero-cities">
+                <?php foreach ($topCities as $c): ?>
+                    <li><a href="<?= e(url('city/' . $c['slug'])) ?>"><span class="hero-city"><?= e(city_name($c)) ?></span><span class="hero-city-count"><?= e(t('n_listings', ['n' => (int) $c['n']])) ?></span></a></li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
         <?= render_partial('partials/search_form') ?>
-        <dl class="hero-stats">
-            <div><dt><?= e(t('stat_listings')) ?></dt><dd><?= number_format((int) $stats['listings']) ?></dd></div>
-            <div><dt><?= e(t('stat_sale')) ?></dt><dd><?= number_format((int) $stats['sale']) ?></dd></div>
-            <div><dt><?= e(t('stat_rent')) ?></dt><dd><?= number_format((int) $stats['rent']) ?></dd></div>
-            <div><dt><?= e(t('offices')) ?></dt><dd><?= number_format((int) $stats['offices']) ?></dd></div>
-        </dl>
     </div>
 </section>
-
-<?php if ($topCities): ?>
-<section class="section container" aria-labelledby="cities-h">
-    <h2 id="cities-h" class="section-title"><?= e(t('browse_by_city')) ?></h2>
-    <ul class="city-tiles">
-        <?php foreach ($topCities as $i => $c): ?>
-            <li>
-                <a class="city-tile city-tile-<?= $i % 6 ?>" href="<?= e(url('city/' . $c['slug'])) ?>">
-                    <span class="city-name"><?= e(city_name($c)) ?></span>
-                    <span class="city-count"><?= e(t('n_listings', ['n' => (int) $c['n']])) ?></span>
-                </a>
-            </li>
-        <?php endforeach; ?>
-    </ul>
-</section>
-<?php endif; ?>
 
 <section class="section section-tight container" aria-labelledby="types-h">
     <h2 id="types-h" class="section-title"><?= e(t('browse_by_type')) ?></h2>

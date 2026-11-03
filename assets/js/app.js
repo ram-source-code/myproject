@@ -998,7 +998,7 @@
         // Active "near" search: show the centre and radius
         const nearPt = (resultsMap.dataset.near || '').split(',').map(Number);
         if (nearPt.length === 2 && nearPt.every(Number.isFinite) && Number(resultsMap.dataset.radius) > 0) {
-            window.L.circle(nearPt, { radius: Number(resultsMap.dataset.radius) * 1000, color: '#0f766e', weight: 2, fillOpacity: 0.06, interactive: false }).addTo(map);
+            window.L.circle(nearPt, { radius: Number(resultsMap.dataset.radius) * 1000, color: '#1f5641', weight: 2, fillOpacity: 0.06, interactive: false }).addTo(map);
             window.L.marker(nearPt, { icon: window.L.divIcon({ className: 'me-pin', iconSize: [18, 18] }), keyboard: false, interactive: false }).addTo(map);
         }
 

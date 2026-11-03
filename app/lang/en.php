@@ -325,7 +325,7 @@ return [
     'footer_about' => 'Kurdistan\'s property marketplace — connecting real estate offices, owners and people looking for a home or an investment.',
     'hero_kicker' => 'Erbil · Sulaymaniyah · Duhok · Halabja',
     'hero_title' => 'Find your next home in Kurdistan',
-    'hero_sub' => 'Houses, apartments and land from trusted real estate offices — follow them to hear about new listings first.',
+    'hero_sub' => 'Houses, apartments and land from real estate offices across Kurdistan. Follow offices to hear about new listings first.',
     'iqd_short' => 'IQD',
     'currency_label' => 'Currency',
     'price_usd_hint' => 'In US dollars. Dinar prices are converted automatically.',
@@ -772,4 +772,5 @@ return [
     'feature_it' => 'Feature',
     'stop' => 'Stop',
     'featured_until' => 'Featured until :date',
+    'hero_question' => 'Which city is your next home in?',
 ];

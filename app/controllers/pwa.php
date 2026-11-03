@@ -169,8 +169,8 @@ function pwa_manifest(): void
         'scope'            => "$base/",
         'display'          => 'standalone',
         'orientation'      => 'any',              // tablets rotate freely
-        'background_color' => '#f6f7f9',
-        'theme_color'      => '#0f766e',
+        'background_color' => '#f6f6f3',
+        'theme_color'      => '#1f5641',
         'categories'       => ['lifestyle', 'shopping', 'business'],
         'icons'            => $icons,
         'display_override' => ['standalone', 'minimal-ui'],

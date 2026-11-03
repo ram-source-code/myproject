@@ -21,7 +21,7 @@ function icon(int $size, float $scale, bool $round, string $file, bool $badge = 
     imagefill($im, 0, 0, imagecolorallocatealpha($im, 0, 0, 0, 127));
     imagealphablending($im, true);
     if (!$badge) {
-        $bg = imagecolorallocate($im, 15, 118, 110);
+        $bg = imagecolorallocate($im, 31, 86, 65);
         if ($round) {
             $r = (int) ($big * 0.22);
             imagefilledrectangle($im, $r, 0, $big - $r, $big, $bg);
@@ -33,7 +33,7 @@ function icon(int $size, float $scale, bool $round, string $file, bool $badge = 
             imagefilledrectangle($im, 0, 0, $big, $big, $bg);
         }
         // subtle accent sun
-        imagefilledellipse($im, (int) ($big * 0.74), (int) ($big * 0.27), (int) ($big * 0.13 * $scale), (int) ($big * 0.13 * $scale), imagecolorallocate($im, 251, 191, 36));
+        imagefilledellipse($im, (int) ($big * 0.74), (int) ($big * 0.27), (int) ($big * 0.13 * $scale), (int) ($big * 0.13 * $scale), imagecolorallocate($im, 233, 169, 43));
     }
     house($im, $big / 2, $big / 2 + $big * 0.02, $big / 24 * $scale, imagecolorallocate($im, 255, 255, 255));
     $dst = imagecreatetruecolor($size, $size);
@@ -60,12 +60,12 @@ $sizes = [
 $font = dirname(__DIR__) . '/app/fonts/Inter-Bold.ttf';
 foreach ($sizes as [$w, $h]) {
     $im = imagecreatetruecolor($w, $h);
-    imagefill($im, 0, 0, imagecolorallocate($im, 15, 118, 110));
+    imagefill($im, 0, 0, imagecolorallocate($im, 31, 86, 65));
     $s = (int) (min($w, $h) * 0.28);
     $cx = intdiv($w, 2);
     $cy = intdiv($h, 2) - intdiv($s, 4);
     // rounded tile
-    $tile = imagecolorallocate($im, 19, 94, 89);
+    $tile = imagecolorallocate($im, 23, 63, 48);
     $r = (int) ($s * 0.22);
     imagefilledrectangle($im, $cx - intdiv($s, 2) + $r, $cy - intdiv($s, 2), $cx + intdiv($s, 2) - $r, $cy + intdiv($s, 2), $tile);
     imagefilledrectangle($im, $cx - intdiv($s, 2), $cy - intdiv($s, 2) + $r, $cx + intdiv($s, 2), $cy + intdiv($s, 2) - $r, $tile);
@@ -73,11 +73,11 @@ foreach ($sizes as [$w, $h]) {
         imagefilledellipse($im, $cx + $dx * (intdiv($s, 2) - $r), $cy + $dy * (intdiv($s, 2) - $r), 2 * $r, 2 * $r, $tile);
     }
     house($im, $cx, $cy + $s * 0.03, $s / 24 * 0.72, imagecolorallocate($im, 255, 255, 255));
-    imagefilledellipse($im, (int) ($cx + $s * 0.24), (int) ($cy - $s * 0.24), (int) ($s * 0.1), (int) ($s * 0.1), imagecolorallocate($im, 251, 191, 36));
+    imagefilledellipse($im, (int) ($cx + $s * 0.24), (int) ($cy - $s * 0.24), (int) ($s * 0.1), (int) ($s * 0.1), imagecolorallocate($im, 233, 169, 43));
     if (is_file($font)) {
         $fs = $s * 0.16;
         $bb = imagettfbbox($fs, 0, $font, 'AQARAT');
-        imagettftext($im, $fs, 0, (int) ($cx - ($bb[2] - $bb[0]) / 2), (int) ($cy + $s * 0.85), imagecolorallocate($im, 204, 251, 241), $font, 'AQARAT');
+        imagettftext($im, $fs, 0, (int) ($cx - ($bb[2] - $bb[0]) / 2), (int) ($cy + $s * 0.85), imagecolorallocate($im, 213, 230, 220), $font, 'AQARAT');
     }
     imagepng($im, "$out/splash/splash-{$w}x{$h}.png", 9);
     imagedestroy($im);
