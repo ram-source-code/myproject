@@ -35,6 +35,11 @@
             <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-alert"></use></svg><p><?= e(t('open_office_desc')) ?></p></div>
         <?php endif; ?>
 
+        <?php if (!$o && !office_signup_open() && $u['role'] !== 'admin'): ?>
+            <div class="alert alert-info"><svg aria-hidden="true"><use href="#i-building"></use></svg><p><?= e(t('offices_in_person')) ?></p>
+                <?php if ($adminWa): ?><a class="btn btn-whatsapp btn-sm" href="<?= e(whatsapp_url($adminWa, t('office_interest_message'))) ?>" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('contact_admin_whatsapp')) ?></a><?php endif; ?>
+            </div>
+        <?php else: ?>
         <form method="post" action="<?= e(url('dashboard/office')) ?>" enctype="multipart/form-data" class="panel stack" novalidate data-validate>
             <?= csrf_field() ?>
             <div class="logo-field">
@@ -85,5 +90,6 @@
             </div>
             <div><button class="btn btn-primary" type="submit"><?= e(t('save_changes')) ?></button></div>
         </form>
+        <?php endif; ?>
     </div>
 </div>

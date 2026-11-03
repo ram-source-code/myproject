@@ -5,8 +5,8 @@
         <form method="post" action="<?= e(url('login')) ?>" class="stack" novalidate data-validate>
             <?= csrf_field() ?>
             <div class="field">
-                <label for="email"><?= e(t('email')) ?></label>
-                <input id="email" name="email" type="email" required autocomplete="username" dir="ltr" autofocus value="<?= e(old('email')) ?>"<?= field_aria('email') ?>>
+                <label for="email"><?= e(t('email_or_phone')) ?></label>
+                <input id="email" name="email" type="text" inputmode="email" required autocomplete="username" dir="ltr" autofocus value="<?= e(old('email')) ?>"<?= field_aria('email') ?>>
                 <?= field_error('email') ?>
             </div>
             <div class="field">

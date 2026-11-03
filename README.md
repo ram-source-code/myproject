@@ -7,15 +7,22 @@ and **Web Push notifications** from real-estate offices (نوسینگە) to the 
 **Only real-estate offices post listings, and only after the admin activates them.** Everyone else browses, saves,
 follows offices and contacts them.
 
-**Office activation (paid plans) — one tap, nothing to type:**
-1. An office registers (or any account picks *Dashboard → Open an office*). It waits for activation: it can't post and
-   isn't shown publicly. You get a push notification (on any phone where you turned notifications on as admin), and
-   **Admin → Offices** shows a red count. The office has a WhatsApp button to message you.
-2. After they pay: pick the length (1/3/6/12 months or no end date) and tap **Activate**. Then tap **Send on WhatsApp**
-   — a ready message telling them they can post, with the link.
-3. Renewing early adds to the current end date. Offices ending within 7 days are listed first with a
-   **Remind on WhatsApp** button, and the office sees a reminder on its page. When a plan ends the office can't post
-   or notify followers until you tap Activate again; its listings stay up. **Deactivate** stops an office at once.
+**New office accounts — two modes** (*Admin → Offices → New office accounts*):
+- **Only I create them** (default — for the start, when you visit every office). Public sign-up makes customer
+  accounts only and tells offices you will visit them. During the visit tap **New office**: office name, owner, phone,
+  optional email, plan and amount, *I visited this office*. It is active at once; you get a **temporary password** to
+  read out, or **Send on WhatsApp**. The office signs in with its **phone number** and must choose its own password
+  first. Forgot it? **New password** on the office's row makes a new temporary one.
+- **Anyone can sign up** (later, when people find you on their own). Offices register and wait for activation; you
+  get a push notification and a red count. After they pay: pick the plan, tap **Activate**, then **Send on WhatsApp**.
+
+Either way: renewing early adds to the current end date; offices ending within 7 days are listed first with
+**Remind on WhatsApp**; when a plan ends the office can't post or notify followers until you activate it again (its
+listings stay up); **Deactivate** stops an office at once. *I visited this office* (or **Verify**) shows
+"Verified — visited in person on <date>" on the office page and its listings.
+
+**Featured listings (paid extra):** in *Admin → Listings* feature a listing for 7/14/30 days (or until you stop it)
+and optionally log the amount; featuring again extends it, and the daily job ends it when the time is up.
 
 The admin's WhatsApp number comes from the admin's phone in *Profile* (or set `admin_whatsapp` in `data/config.local.php`).
 No frameworks, no Composer, no build step.
@@ -193,6 +200,12 @@ a HEIC file that still arrives gets a clear message. Then on the server: MIME sn
 orientation fixed, resized (1600×1200 max + 640×427 thumbnail; logos 256×256), **re-encoded to WebP**
 (strips metadata/GPS and any embedded payload), watermarked with the office logo (`AQARAT_WATERMARK=0` to
 disable), saved under random names.
+
+## Busy days: page cache and skeletons
+Pages are rendered on the server and arrive complete, so skeletons are used only where content loads afterwards
+(near you, recommended, notification lists, the map). For visitors who are not signed in, home, search (common
+filters, first 5 pages), offices, office and city pages are kept for 60 seconds in `data/cache/` (tokens swapped per
+visitor; any change on the site empties it at once). Listing pages, "near me" and signed-in pages are never cached.
 
 ## Database (`app/db.php`)
 `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`; versioned migrations

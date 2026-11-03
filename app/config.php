@@ -70,6 +70,8 @@ $config = [
     'saved_search_limit' => 10,
     // Web Push (VAPID). Keys are generated automatically into data/vapid.json on first use.
     'push_subject'    => $env('PUSH_SUBJECT', $lc('push_subject', 'mailto:admin@example.com')),
+    // 'admin' = only the admin creates office accounts (after visiting them); 'open' = offices sign up, admin activates
+    'office_signup'   => $env('OFFICE_SIGNUP', $lc('office_signup', 'admin')),
     'vapid_file'      => $env('VAPID_FILE', $dataDir . '/' . basename((string) $lc('vapid_file', 'vapid.json'))),
     'push_ttl'        => 86400 * 3,
 

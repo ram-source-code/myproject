@@ -85,7 +85,7 @@
                             </div>
                         </td>
                         <td data-label="<?= e(t('price')) ?>"><?= e(price_label($p)) ?></td>
-                        <td data-label="<?= e(t('status')) ?>"><span class="status status-<?= e($p['status']) ?>"><?= e(t('status_' . $p['status'])) ?></span></td>
+                        <td data-label="<?= e(t('status')) ?>"><span class="status status-<?= e($p['status']) ?>"><?= e(t('status_' . $p['status'])) ?></span><?php if ($p['is_featured']): ?> <span class="badge badge-featured small"><svg aria-hidden="true"><use href="#i-star"></use></svg><?= e($p['featured_until'] ? t('featured_until', ['date' => substr($p['featured_until'], 0, 10)]) : t('featured')) ?></span><?php endif; ?></td>
                         <td data-label="<?= e(t('views')) ?>"><?= number_format((int) $p['views']) ?></td>
                         <?php $ms = $month[(int) $p['id']] ?? ['wa' => 0, 'calls' => 0, 'inquiries' => 0, 'views' => 0]; ?>
                         <td data-label="<?= e(t('contacts_30')) ?>"><span title="<?= e(t('whatsapp') . ' ' . $ms['wa'] . ' · ' . t('calls') . ' ' . $ms['calls'] . ' · ' . t('inquiries') . ' ' . $ms['inquiries']) ?>"><?= $ms['wa'] + $ms['calls'] + $ms['inquiries'] ?></span></td>

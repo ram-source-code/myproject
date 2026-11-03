@@ -2,6 +2,12 @@
     <section class="panel auth-card" aria-labelledby="reg-h">
         <h1 id="reg-h" class="page-title"><?= e(t('register')) ?></h1>
         <p class="muted"><?= e(t('register_sub')) ?></p>
+        <?php if (!office_signup_open()): ?>
+            <div class="alert alert-info" id="for-offices"><svg aria-hidden="true"><use href="#i-building"></use></svg>
+                <p><?= e(t('offices_in_person')) ?></p>
+                <?php if ($adminWa): ?><a class="btn btn-whatsapp btn-sm" href="<?= e(whatsapp_url($adminWa, t('office_interest_message'))) ?>" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('contact_admin_whatsapp')) ?></a><?php endif; ?>
+            </div>
+        <?php endif; ?>
         <form method="post" action="<?= e(url('register')) ?>" class="stack" novalidate data-validate>
             <?= csrf_field() ?>
             <?= form_time_field() ?>
@@ -21,6 +27,7 @@
                 <p class="hint"><?= e(t('phone_hint')) ?></p>
                 <?= field_error('phone') ?>
             </div>
+            <?php if (office_signup_open()): ?>
             <?php $defRole = old('role', ($_GET['type'] ?? '') === 'office' ? 'agent' : 'user'); ?>
             <fieldset class="segmented segmented-full">
                 <legend><?= e(t('account_type')) ?></legend>
@@ -33,6 +40,7 @@
                 <p class="hint"><?= e(t('office_register_hint')) ?></p>
                 <?= field_error('office_name') ?>
             </div>
+            <?php endif; ?>
             <div class="field">
                 <label for="password"><?= e(t('password')) ?></label>
                 <div class="password-wrap">

@@ -883,6 +883,10 @@
         }
     }));
 
+    /** Card-shaped placeholders while a row loads: the space is kept, so nothing jumps when results arrive. */
+    const skeletonCards = (n) => Array.from({ length: n }, () => el('div', { class: 'sk-card', 'aria-hidden': 'true' },
+        el('div', { class: 'sk sk-media' }), el('div', { class: 'sk sk-line sk-w80' }), el('div', { class: 'sk sk-line sk-w50' })));
+
     // Home: "Near you" row (+ city fallback) and "Recommended for you"
     const nearSec = $('[data-near-section]');
     if (nearSec) {
@@ -895,8 +899,11 @@
             if (btn) { btn.disabled = true; btn.classList.add('is-locating'); }
             try {
                 const loc = await getLocation();
+                list.replaceChildren(...skeletonCards(4));
+                list.setAttribute('aria-busy', 'true');
                 const r = await fetch(nearSec.dataset.endpoint + '?near=' + encodeURIComponent(nearParam(loc)), { headers: { Accept: 'application/json' } });
                 const d = await r.json();
+                list.replaceChildren();
                 if (!d.ok || !d.count) { showFallback(tr('near_none')); return; }
                 prompt.hidden = true;
                 list.insertAdjacentHTML('beforeend', d.html);       // server-rendered, escaped markup from our own API
@@ -907,8 +914,10 @@
                 all.hidden = false;
                 loadReco(loc);
             } catch (err) {
+                list.replaceChildren();
                 showFallback(err.message + ' ' + tr('pick_city'));
             } finally {
+                list.removeAttribute('aria-busy');
                 if (btn) { btn.disabled = false; btn.classList.remove('is-locating'); }
             }
         };
@@ -927,13 +936,16 @@
         if (!ids.length) return;
         recoLoaded = true;
         const q = '?ids=' + ids.join(',') + (loc ? '&near=' + encodeURIComponent(nearParam(loc)) : '');
+        const list = $('[data-reco-list]', sec);
+        list.replaceChildren(...skeletonCards(4));            // we know a row is coming: hold its place
+        list.setAttribute('aria-busy', 'true');
+        sec.hidden = false;
         fetch(sec.dataset.endpoint + q, { headers: { Accept: 'application/json' } }).then((r) => r.json()).then((d) => {
-            if (!d.ok || !d.count) return;
-            const list = $('[data-reco-list]', sec);
+            list.replaceChildren();
+            if (!d.ok || !d.count) { sec.hidden = true; return; }
             list.insertAdjacentHTML('beforeend', d.html);
             paintPlaceholders(list);
-            sec.hidden = false;
-        }).catch(() => {});
+        }).catch(() => { sec.hidden = true; }).finally(() => list.removeAttribute('aria-busy'));
     }
     if ($('[data-reco-section]')) setTimeout(() => loadReco(null), 0);
 
@@ -1029,6 +1041,7 @@
             location.href = withQuery(resultsMap.dataset.searchArea, { near: nearParam({ lat: c.lat, lng: c.lng }), r, sort: 'nearest' });
         });
         fetch(resultsMap.dataset.endpoint, { headers: { Accept: 'application/json' } })
+            .finally(() => resultsMap.classList.remove('is-loading'))
             .then((r) => r.json())
             .then(({ items = [] }) => {
                 if (!items.length) {

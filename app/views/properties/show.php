@@ -179,6 +179,7 @@ $isLive = $p['status'] === 'published';
                         <span>
                             <span class="owner-name"><?= e($office['name']) ?><?php if ($office['is_verified']): ?> <svg class="verified" aria-label="<?= e(t('verified')) ?>" role="img"><use href="#i-verified"></use></svg><?php endif; ?></span>
                             <span class="muted small d-block"><?= e(t('office')) ?> · <?= e(t('n_listings', ['n' => (int) $office['listings']])) ?></span>
+                            <?php if ($office['is_verified']): ?><span class="verified-line small d-block"><?= e(t('verified_visited_short')) ?></span><?php endif; ?>
                         </span>
                     </a>
                     <?= render_partial('partials/follow_button', ['o' => $office, 'block' => true]) ?>

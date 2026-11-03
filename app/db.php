@@ -460,6 +460,15 @@ function migrations(): array
             ALTER TABLE users ADD COLUMN recovery_codes TEXT    NOT NULL DEFAULT '[]';
             SQL);
         },
+        // v9 — offices set up in person (temporary password), visited-in-person badge, paid featured listings
+        <<<'SQL'
+        ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE offices ADD COLUMN verified_at TEXT;
+        UPDATE offices SET verified_at = created_at WHERE is_verified = 1;
+        ALTER TABLE properties ADD COLUMN featured_until TEXT;
+        ALTER TABLE payments ADD COLUMN kind TEXT NOT NULL DEFAULT 'plan';
+        ALTER TABLE payments ADD COLUMN property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL;
+        SQL,
     ];
 }
 

@@ -101,6 +101,9 @@ function routes(): array
         ['POST', '/admin/offices/(\d+)/verify',         'admin_office_verify'],
         ['POST', '/admin/offices/(\d+)/activate',       'admin_office_activate'],
         ['POST', '/admin/offices/(\d+)/deactivate',     'admin_office_deactivate'],
+        ['POST', '/admin/offices/(\d+)/password',       'admin_office_password'],
+        ['POST', '/admin/offices/new',                  'admin_office_new'],
+        ['POST', '/admin/offices/signup-mode',          'admin_office_signup_mode'],
         ['GET',  '/admin/notifications',                'admin_notifications'],
         ['POST', '/admin/notifications',                'admin_notification_send'],
         ['GET',  '/admin/cities',                       'admin_cities'],
@@ -126,6 +129,12 @@ function dispatch(string $method, string $path): void
     if ($method === 'GET' && random_int(1, 20) === 1) {
         run_maintenance();                                   // daily privacy/retention cleanup (cheap check)
     }
+    // An account the admin set up must choose its own password first (profile, saving it and signing out still work).
+    if (($u = current_user()) && !in_array($path, ['/dashboard/profile', '/dashboard/password', '/logout', '/manifest', '/offline'], true)
+        && (int) (db()->query('SELECT must_change_password FROM users WHERE id = ' . (int) $u['id'])->fetchColumn()) === 1) {
+        flash('info', t('choose_own_password'));
+        redirect(url('dashboard/profile') . '#password');
+    }
     // Until an administrator exists, every page leads to the guided installer.
     if (!admin_exists() && !in_array($path, ['/install', '/manifest', '/manifest.webmanifest', '/offline', '/robots.txt'], true)) {
         redirect(url('install'), 302);
@@ -142,8 +151,22 @@ function dispatch(string $method, string $path): void
         }
         if ($method === 'POST') {
             verify_csrf();
+            if (!page_cache_is_beacon($path)) {
+                page_cache_bump();                       // something may change on public pages
+            }
         }
         $args = array_map(static fn($v) => ctype_digit($v) ? (int) $v : $v, array_slice($mm, 1));
+        $cacheKey = page_cache_key($method, $path);
+        if ($cacheKey !== null && page_cache_serve($cacheKey)) {
+            return;
+        }
+        if ($cacheKey !== null) {
+            ob_start();
+            $handler(...$args);
+            page_cache_store($cacheKey, (string) ob_get_contents());
+            ob_end_flush();
+            return;
+        }
         $handler(...$args);
         return;
     }

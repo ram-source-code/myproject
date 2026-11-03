@@ -79,12 +79,36 @@ function admin_property_status(int $id): void
     back('/admin/properties');
 }
 
+const FEATURE_DAYS = [7, 14, 30];      // plus 0 = until you stop it
+
+/** Feature a listing (a paid extra): for N days, extending a running feature; or stop it. Payment optional. */
 function admin_property_feature(int $id): void
 {
-    require_admin();
-    db()->prepare('UPDATE properties SET is_featured = 1 - is_featured WHERE id = ?')->execute([$id]);
-    admin_log('listing.feature', "#$id");
-    flash('success', t('status_changed'));
+    $admin = require_admin();
+    $p = find_property($id) ?? abort(404);
+    if (input('action') === 'stop') {
+        db()->prepare('UPDATE properties SET is_featured = 0, featured_until = NULL WHERE id = ?')->execute([$id]);
+        admin_log('listing.unfeature', "#$id");
+        flash('success', t('feature_stopped'));
+        back('/admin/properties');
+    }
+    $days = (int) input('days');
+    $days = in_array($days, FEATURE_DAYS, true) ? $days : null;
+    if ($days === null) {
+        db()->prepare('UPDATE properties SET is_featured = 1, featured_until = NULL WHERE id = ?')->execute([$id]);
+    } else {
+        db()->prepare("UPDATE properties SET is_featured = 1,
+            featured_until = datetime(CASE WHEN is_featured = 1 AND featured_until > datetime('now') THEN featured_until ELSE datetime('now') END, '+' || ? || ' days')
+            WHERE id = ?")->execute([$days, $id]);
+    }
+    $amount = max(0, (int) convert_arabic_digits((string) ($_POST['amount'] ?? '')));
+    if ($amount > 0) {
+        db()->prepare("INSERT INTO payments (office_id, office_name, amount, currency, months, created_by, kind, property_id) VALUES (?,?,?,?, NULL, ?, 'featured', ?)")
+            ->execute([$p['office_id'] ?: null, ($p['office_name'] ?: $p['owner_name']) . ' — ' . mb_substr($p['title'], 0, 60), $amount,
+                input('currency') === 'USD' ? 'USD' : 'IQD', $admin['id'], $id]);
+    }
+    admin_log('listing.feature', "#$id " . ($days ? "{$days}d" : 'no end'));
+    flash('success', t('feature_started'));
     back('/admin/properties');
 }
 
@@ -264,19 +288,23 @@ function admin_offices(): void
             ELSE 3 END, o.active_until, o.created_at DESC LIMIT 500")->fetchAll();
     $done = $_SESSION['_activated'] ?? null;
     unset($_SESSION['_activated']);
+    $created = $_SESSION['_created'] ?? null;          // new login, shown once
+    unset($_SESSION['_created']);
     $payMonth = ['n' => 0];
     foreach (db()->query("SELECT currency, SUM(amount) total, COUNT(*) n FROM payments WHERE created_at >= datetime('now', 'start of month') GROUP BY currency") as $r) {
         $payMonth[$r['currency']] = (int) $r['total'];
         $payMonth['n'] += (int) $r['n'];
     }
     $payments = db()->query('SELECT * FROM payments ORDER BY id DESC LIMIT 50')->fetchAll();
-    render('admin/offices', ['pageTitle' => t('offices') . ' — ' . app_name(), 'items' => $rows, 'done' => $done, 'payMonth' => $payMonth, 'payments' => $payments, 'active' => 'admin_offices']);
+    render('admin/offices', ['pageTitle' => t('offices') . ' — ' . app_name(), 'items' => $rows, 'done' => $done, 'created' => $created, 'payMonth' => $payMonth, 'payments' => $payments, 'active' => 'admin_offices']);
 }
 
 function admin_office_verify(int $id): void
 {
     require_admin();
-    db()->prepare('UPDATE offices SET is_verified = 1 - is_verified WHERE id = ?')->execute([$id]);
+    // Verified = the admin visited the office in person; remember when (shown publicly).
+    db()->prepare("UPDATE offices SET is_verified = 1 - is_verified,
+        verified_at = CASE WHEN is_verified = 0 THEN datetime('now') ELSE NULL END WHERE id = ?")->execute([$id]);
     admin_log('office.verify', "#$id");
     flash('success', t('status_changed'));
     redirect(url('admin/offices'));
@@ -326,6 +354,107 @@ function office_contact_phone(array $o): string
         $phone = (string) $st->fetchColumn();
     }
     return valid_phone($phone) ? $phone : '';
+}
+
+/** During a visit: create the office's account, active at once, with a temporary password to hand over. */
+function admin_office_new(): void
+{
+    $admin = require_admin();
+    $d = [
+        'office' => mb_substr(trim(input('office_name')), 0, 100),
+        'owner'  => mb_substr(trim(input('owner_name')), 0, 100),
+        'phone'  => mb_substr(convert_arabic_digits(trim(input('phone'))), 0, 30),
+        'email'  => mb_strtolower(mb_substr(trim(input('email')), 0, 150)),
+        'city'   => input_int('city_id'),
+    ];
+    $errors = [];
+    if (mb_strlen($d['office']) < 2) {
+        $errors['office_name'] = t('v_office_name');
+    }
+    if (mb_strlen($d['owner']) < 2) {
+        $errors['owner_name'] = t('v_name');
+    }
+    if (!valid_phone($d['phone'])) {
+        $errors['phone'] = t('v_phone');
+    } elseif (user_by_phone($d['phone'])) {
+        $errors['phone'] = t('v_phone_taken');
+    }
+    if ($d['email'] !== '') {
+        $st = db()->prepare('SELECT 1 FROM users WHERE email = ?');
+        $st->execute([$d['email']]);
+        if (!filter_var($d['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = t('v_email');
+        } elseif ($st->fetchColumn()) {
+            $errors['email'] = t('v_email_taken');
+        }
+    }
+    if ($errors) {
+        with_old($d + ['office_name' => $d['office'], 'owner_name' => $d['owner'], 'city_id' => (string) $d['city']], $errors);
+        redirect(url('admin/offices') . '#new-office');
+    }
+    $email = $d['email'] !== '' ? $d['email'] : 'office-' . phone_intl($d['phone']) . '@phone.invalid';   // signs in with the phone
+    $password = readable_password();
+    $months = (int) input('months');
+    $months = in_array($months, ACTIVATION_MONTHS, true) ? $months : null;
+    $visited = !empty($_POST['visited']);
+
+    $pdo = db();
+    $pdo->exec('BEGIN IMMEDIATE');
+    $pdo->prepare("INSERT INTO users (name, email, phone, password_hash, role, must_change_password) VALUES (?,?,?,?, 'agent', 1)")
+        ->execute([$d['owner'], $email, $d['phone'], password_hash($password, PASSWORD_ALGO)]);
+    $uid = (int) $pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO offices (user_id, name, slug, phone, whatsapp, city_id, activated_at, active_until, is_verified, verified_at)
+        VALUES (?,?,?,?,?,?, datetime('now'), " . ($months ? "datetime('now', '+$months months')" : 'NULL') . ', ?, ' . ($visited ? "datetime('now')" : 'NULL') . ')')
+        ->execute([$uid, $d['office'], office_slug($d['office']), $d['phone'], $d['phone'], $d['city'], $visited ? 1 : 0]);
+    $oid = (int) $pdo->lastInsertId();
+    $amount = max(0, (int) convert_arabic_digits((string) ($_POST['amount'] ?? '')));
+    if ($amount > 0) {
+        $pdo->prepare('INSERT INTO payments (office_id, office_name, amount, currency, months, created_by) VALUES (?,?,?,?,?,?)')
+            ->execute([$oid, $d['office'], $amount, input('currency') === 'USD' ? 'USD' : 'IQD', $months, $admin['id']]);
+    }
+    $pdo->exec('COMMIT');
+    admin_log('office.create', "#$oid " . $d['office']);
+    $_SESSION['_created'] = login_handover($d['office'], $d['phone'], $password, false);
+    redirect(url('admin/offices') . '#created');
+}
+
+/** Office forgot its password: make a new temporary one (they choose their own at the next sign-in). */
+function admin_office_password(int $id): void
+{
+    require_admin();
+    $o = find_office($id) ?? abort(404);
+    $st = db()->prepare('SELECT id, phone, email, role FROM users WHERE id = ?');
+    $st->execute([$o['user_id']]);
+    $u = $st->fetch() ?: abort(404);
+    if ($u['role'] === 'admin') {
+        abort(403);                        // never reset an administrator's password from here
+    }
+    $password = readable_password();
+    db()->prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?')->execute([password_hash($password, PASSWORD_ALGO), $u['id']]);
+    admin_log('office.password', "#$id");
+    $phone = office_contact_phone($o) ?: (string) $u['phone'];
+    $_SESSION['_created'] = login_handover($o['name'], $phone, $password, true);
+    redirect(url('admin/offices') . '#created');
+}
+
+/** What the admin shows or sends the office: how to sign in, with a ready WhatsApp message. */
+function login_handover(string $office, string $phone, string $password, bool $reset): array
+{
+    $msg = t($reset ? 'handover_reset_message' : 'handover_message', [
+        'app' => app_name(), 'office' => $office, 'phone' => $phone, 'password' => $password, 'url' => absolute_base_url() . '/login',
+    ]);
+    return ['office' => $office, 'phone' => $phone, 'password' => $password, 'reset' => $reset, 'message' => $msg,
+            'wa' => valid_phone($phone) ? whatsapp_url($phone, $msg) : null];
+}
+
+function admin_office_signup_mode(): void
+{
+    require_admin();
+    $mode = input('mode') === 'open' ? 'open' : 'admin';
+    save_local_config(['office_signup' => $mode]);
+    admin_log('settings.office_signup', $mode);
+    flash('success', t($mode === 'open' ? 'signup_now_open' : 'signup_now_admin'));
+    redirect(url('admin/offices'));
 }
 
 function admin_office_deactivate(int $id): void
