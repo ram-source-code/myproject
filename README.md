@@ -105,6 +105,17 @@ descriptions and long text; both cover Kurdish, Arabic and English. Colours come
 and errors, on gypsum `#f6f6f3`. The home page opens with the question *"Which city is your next home in?"* and
 the city names set large; listings are photo-first with the price in heavy Kufi; sections are divided by rules
 instead of boxes. Motion only answers what a person does (page changes, the save heart, menus).
+**Drawn, not generated:** the Erbil skyline (the Citadel's ring of house façades, the Grand Gate and ramp, the
+Mudhafaria minaret, the Zagros line, new blocks and a crane), a Kurdish kilim band above the footer, and small
+sketches for "how it works", empty states and the error page are drawn with a hand-drawn pen
+(`bin/art/pen.php`: double, slightly disagreeing strokes, overshoot and uneven hatching). Change a drawing in
+`bin/build-art.php` and run `php bin/build-art.php`; the output is plain SVG whose ink follows the theme colour.
+**Demo photos are sketches too:** `--demo` (and the installer's demo option) draws every listing photo as an
+ink-and-watercolour sketch with GD alone (`app/sketch.php`, scenes in `app/sketch_scenes.php`), in real perspective
+and true to how property here looks: stone-clad villas with a columned porch, iron gate and rooftop water tanks,
+solar heater and dish; flat-roofed houses behind a yard wall with the generator cable coming in; gated tower
+compounds; shop rows with roller shutters and split-AC units; plots with survey stakes and concrete frames rising
+next door; and rooms (living room with a kilim rug, kitchen, shop and office interiors). About 0.3 s a photo.
 - **Instant navigation:** Speculation Rules prefetch likely next pages on hover/touch and prerender listing,
   office and city pages (prerenders never inflate view counts — the page reports the view only when shown).
 - **Smooth page changes:** cross-document **View Transitions**; the card photo morphs into the listing hero and

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/* Demo data: offices with logos, ~30 Kurdistan listings with generated photos, a planted duplicate,
+/* Demo data: offices with logos, ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
  * and (only when ffmpeg exists) short demo videos. Used by bin/seed.php --demo and the web installer. */
 
 function demo_logo(int $seed, string $letter): string
@@ -22,71 +22,15 @@ function demo_logo(int $seed, string $letter): string
     return $tmp;
 }
 
-/** Draw a simple stylised building photo with GD and return a temp JPEG path. */
-function demo_photo(int $seed, string $kind): string
+/**
+ * A demo listing photo: an ink-and-watercolour sketch of this kind of property as it really looks here
+ * (see app/sketch_scenes.php). $k is the photo's position in the listing: cover first, then rooms and other views.
+ */
+function demo_photo(int $seed, string $type, int $k = 0, bool $farm = false): string
 {
-    mt_srand($seed);
-    $w = 1400; $h = 933;
-    $im = imagecreatetruecolor($w, $h);
-    $top = [mt_rand(70, 140), mt_rand(140, 190), mt_rand(200, 245)];
-    $bot = [mt_rand(220, 250), mt_rand(200, 230), mt_rand(170, 210)];
-    for ($y = 0; $y < $h; $y++) {
-        $t = $y / $h;
-        $c = imagecolorallocate($im, (int) ($top[0] + ($bot[0] - $top[0]) * $t), (int) ($top[1] + ($bot[1] - $top[1]) * $t), (int) ($top[2] + ($bot[2] - $top[2]) * $t));
-        imageline($im, 0, $y, $w, $y, $c);
-    }
-    // mountains in the background (Kurdistan!)
-    for ($m = 0; $m < 3; $m++) {
-        $mc = imagecolorallocate($im, 110 + $m * 25, 125 + $m * 22, 140 + $m * 18);
-        $pts = [0, (int) ($h * 0.78)];
-        for ($x = 0; $x <= $w; $x += 100) {
-            $pts[] = $x;
-            $pts[] = (int) ($h * (0.42 + 0.1 * $m) + mt_rand(-60, 60));
-        }
-        $pts[] = $w; $pts[] = (int) ($h * 0.78);
-        imagefilledpolygon($im, $pts, $mc);
-    }
-    imagefilledellipse($im, mt_rand(150, 1250), mt_rand(90, 200), 110, 110, imagecolorallocatealpha($im, 255, 240, 200, 30));
-    $ground = $kind === 'land' ? imagecolorallocate($im, 196, 164, 120) : imagecolorallocate($im, 120, 150, 95);
-    imagefilledrectangle($im, 0, (int) ($h * 0.78), $w, $h, $ground);
-    if ($kind !== 'land') {
-        $palette = [[235, 225, 205], [210, 200, 185], [190, 205, 215], [245, 240, 230], [200, 185, 165]];
-        $count = $kind === 'villa' ? 1 : mt_rand(2, 4);
-        $x = mt_rand(60, 200);
-        for ($b = 0; $b < $count; $b++) {
-            $bw = $kind === 'villa' ? mt_rand(700, 900) : mt_rand(220, 340);
-            $bh = $kind === 'villa' ? mt_rand(300, 380) : mt_rand(350, 640);
-            $base = (int) ($h * 0.8);
-            $col = $palette[mt_rand(0, count($palette) - 1)];
-            $body = imagecolorallocate($im, ...$col);
-            $shade = imagecolorallocate($im, (int) ($col[0] * 0.8), (int) ($col[1] * 0.8), (int) ($col[2] * 0.8));
-            imagefilledrectangle($im, $x, $base - $bh, $x + $bw, $base, $body);
-            imagefilledrectangle($im, $x + $bw - 30, $base - $bh, $x + $bw, $base, $shade);
-            $glass = imagecolorallocate($im, mt_rand(60, 100), mt_rand(110, 150), mt_rand(150, 190));
-            for ($wy = $base - $bh + 30; $wy < $base - 70; $wy += 70) {
-                for ($wx = $x + 25; $wx < $x + $bw - 70; $wx += 60) {
-                    imagefilledrectangle($im, $wx, $wy, $wx + 34, $wy + 44, $glass);
-                }
-            }
-            imagefilledrectangle($im, $x + (int) ($bw / 2) - 30, $base - 90, $x + (int) ($bw / 2) + 30, $base, imagecolorallocate($im, 90, 60, 40));
-            $x += $bw + mt_rand(30, 80);
-            if ($x > $w - 200) {
-                break;
-            }
-        }
-    }
-    for ($p = 0; $p < mt_rand(1, 3); $p++) {
-        $px = mt_rand(40, $w - 40);
-        $py = (int) ($h * 0.82);
-        imagefilledellipse($im, $px, $py - 120, 120, 200, imagecolorallocate($im, 40, 110, 60));
-        imagesetthickness($im, 12);
-        imageline($im, $px, $py, $px, $py - 60, imagecolorallocate($im, 110, 80, 50));
-        imagesetthickness($im, 1);
-    }
-    $tmp = tempnam(sys_get_temp_dir(), 'aq') . '.jpg';
-    imagejpeg($im, $tmp, 88);
-    imagedestroy($im);
-    return $tmp;
+    require_once __DIR__ . '/sketch_scenes.php';
+    $scenes = sk_scenes_for($type);
+    return sk_render($scenes[$k % count($scenes)], $seed, $farm);
 }
 
 function demo_log(string $msg): void
@@ -203,7 +147,7 @@ function seed_demo_data(int $adminId): void
         $pid = (int) $pdo->lastInsertId();
         $files = [];
         for ($k = 0; $k < mt_rand(3, 4); $k++) {
-            $tmp = demo_photo($i * 10 + $k, $type === 'land' ? 'land' : (in_array($type, ['villa', 'house'], true) ? 'villa' : 'tower'));
+            $tmp = demo_photo($i * 10 + $k, $type, $k, $deed === 'agricultural');
             $files[] = ['name' => "demo$k.jpg", 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => filesize($tmp), 'type' => 'image/jpeg'];
         }
         $errs = attach_uploaded_images($pid, $files);

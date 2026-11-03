@@ -1,6 +1,7 @@
 <section class="hero" aria-labelledby="hero-h">
     <div class="container hero-inner">
         <h1 id="hero-h" class="hero-title"><?= e(t('hero_question')) ?></h1>
+        <div class="hero-skyline"><?= render_partial('partials/art/skyline') ?></div>
         <?php if ($topCities): ?>
             <ul class="hero-cities">
                 <?php foreach ($topCities as $c): ?>
@@ -105,7 +106,7 @@
         </div>
     <?php else: ?>
         <div class="empty-state">
-            <svg aria-hidden="true"><use href="#i-home"></use></svg>
+            <?= render_partial('partials/art/empty') ?>
             <p><?= e(t('no_listings_yet')) ?></p>
             <?php if (can_post_listings(current_user())): ?><a class="btn btn-primary" href="<?= e(url('dashboard/properties/new')) ?>"><?= e(t('add_first_listing')) ?></a><?php endif; ?>
         </div>
@@ -115,9 +116,9 @@
 <section class="section container cv" aria-labelledby="how-h">
     <h2 id="how-h" class="section-title"><?= e(t('how_title')) ?></h2>
     <ol class="how-steps">
-        <li><svg aria-hidden="true"><use href="#i-search"></use></svg><h3><?= e(t('how_1_t')) ?></h3><p class="muted"><?= e(t('how_1')) ?></p></li>
-        <li><svg aria-hidden="true"><use href="#i-bell"></use></svg><h3><?= e(t('how_2_t')) ?></h3><p class="muted"><?= e(t('how_2')) ?></p></li>
-        <li><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><h3><?= e(t('how_3_t')) ?></h3><p class="muted"><?= e(t('how_3')) ?></p></li>
+        <li><?= render_partial('partials/art/how-1') ?><h3><?= e(t('how_1_t')) ?></h3><p class="muted"><?= e(t('how_1')) ?></p></li>
+        <li><?= render_partial('partials/art/how-2') ?><h3><?= e(t('how_2_t')) ?></h3><p class="muted"><?= e(t('how_2')) ?></p></li>
+        <li><?= render_partial('partials/art/how-3') ?><h3><?= e(t('how_3_t')) ?></h3><p class="muted"><?= e(t('how_3')) ?></p></li>
     </ol>
 </section>
 

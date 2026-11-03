@@ -115,7 +115,7 @@
         </div>
         <?php else: ?>
             <div class="empty-state">
-                <svg aria-hidden="true"><use href="#i-home"></use></svg>
+                <?= render_partial('partials/art/empty') ?>
                 <p><?= e(t('no_my_listings')) ?></p>
                 <a class="btn btn-primary" href="<?= e(url('dashboard/properties/new')) ?>"><?= e(t('add_first_listing')) ?></a>
             </div>

@@ -1,4 +1,5 @@
 <div class="container error-page">
+    <?= render_partial('partials/art/signpost') ?>
     <p class="error-code" aria-hidden="true"><?= (int) $code ?></p>
     <h1 class="page-title"><?= e($title) ?></h1>
     <?php if (!empty($message)): ?><p class="muted"><?= e($message) ?></p><?php endif; ?>

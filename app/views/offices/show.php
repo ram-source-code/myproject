@@ -55,6 +55,6 @@ $wa = $o['whatsapp'] ?: $o['phone'];
         </div>
         <?= render_partial('partials/pagination', ['pg' => $pg, 'base' => 'office/' . $o['id'], 'query' => ['purpose' => $filters['purpose']]]) ?>
     <?php else: ?>
-        <div class="empty-state"><svg aria-hidden="true"><use href="#i-home"></use></svg><p><?= e(t('no_results')) ?></p></div>
+        <div class="empty-state"><?= render_partial('partials/art/empty') ?><p><?= e(t('no_results')) ?></p></div>
     <?php endif; ?>
 </div>
