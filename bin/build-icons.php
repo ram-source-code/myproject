@@ -5,7 +5,8 @@
  *
  *   php bin/build-icons.php
  *
- * To add an icon: pick a name from bin/icon-pack/lucide/ and add it to $MAP below.
+ * Only the icons in use are kept in bin/icon-pack/lucide/. To add one: download its SVG from https://lucide.dev
+ * (same ISC licence) into bin/icon-pack/lucide/, add it to $MAP below and run this script.
  */
 declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { exit(1); }
@@ -13,7 +14,7 @@ $root = dirname(__DIR__);
 
 // sprite id => [pack, file]
 $MAP = [
-    'home' => ['lucide', 'house'], 'menu' => ['lucide', 'menu'], 'x' => ['lucide', 'x'], 'plus' => ['lucide', 'plus'],
+    'home' => ['lucide', 'house'], 'x' => ['lucide', 'x'], 'plus' => ['lucide', 'plus'],
     'user' => ['lucide', 'user-round'], 'search' => ['lucide', 'search'], 'pin' => ['lucide', 'map-pin'],
     'bed' => ['lucide', 'bed-double'], 'bath' => ['lucide', 'bath'], 'area' => ['lucide', 'scan'], 'heart' => ['lucide', 'heart'],
     'check' => ['lucide', 'check'], 'alert' => ['lucide', 'circle-alert'], 'image' => ['lucide', 'image'], 'upload' => ['lucide', 'upload'],
@@ -23,7 +24,7 @@ $MAP = [
     'verified' => ['lucide', 'badge-check'], 'map' => ['lucide', 'map'], 'grid' => ['lucide', 'layout-grid'], 'download' => ['lucide', 'download'],
     'send' => ['lucide', 'send'], 'clock' => ['lucide', 'clock'], 'doc' => ['lucide', 'file-text'], 'flag' => ['lucide', 'flag'],
     'video' => ['lucide', 'video'], 'copy' => ['lucide', 'copy'], 'key' => ['lucide', 'key-round'], 'share' => ['lucide', 'share-2'], 'camera' => ['lucide', 'camera'],
-    'locate' => ['lucide', 'locate-fixed'], 'sparkles' => ['lucide', 'sparkles'], 'arrow' => ['lucide', 'arrow-up-right'], 'trend-down' => ['lucide', 'trending-down'],
+    'locate' => ['lucide', 'locate-fixed'], 'sparkles' => ['lucide', 'sparkles'], 'trend-down' => ['lucide', 'trending-down'],
     'minus' => ['lucide', 'minus'], 'wifi-off' => ['lucide', 'wifi-off'], 'settings' => ['lucide', 'settings'],
     'ios-share' => ['lucide', 'share'], 'square-plus' => ['lucide', 'square-plus'], 'smartphone' => ['lucide', 'smartphone'],
     'whatsapp' => ['simple-icons', 'whatsapp'], 'telegram' => ['simple-icons', 'telegram'],
