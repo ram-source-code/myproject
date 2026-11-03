@@ -2,7 +2,7 @@
  * Lives in the install folder (e.g. /aqarat/sw.js) so its scope is that folder only. */
 'use strict';
 
-const VERSION = 'v9';
+const VERSION = 'v10';
 const SCOPE = new URL(self.registration.scope);           // e.g. https://example.com/aqarat/
 const BASE = SCOPE.pathname.replace(/\/$/, '');            // e.g. /aqarat
 const STATIC = `static-${VERSION}`;
@@ -13,7 +13,11 @@ const PRECACHE = [OFFLINE_URL, `${BASE}/assets/img/icon-192.png`, `${BASE}/asset
 const PRIVATE = /\/(dashboard|admin|login|register|logout|push|api|lang|install|og)(\/|$)/;
 
 self.addEventListener('install', (event) => {
-    event.waitUntil(caches.open(STATIC).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+    // Cache what we can, one by one: a single failing URL must not stop the worker installing,
+    // or everything that waits for it (turning on notifications) would wait forever.
+    event.waitUntil(caches.open(STATIC)
+        .then((c) => Promise.allSettled(PRECACHE.map((u) => c.add(u))))
+        .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

@@ -98,7 +98,7 @@ $useMap = $useMap ?? false;
     'files_selected' => t('files_selected'), 'file_too_big' => t('file_too_big'), 'too_many_files' => t('too_many_files'), 'remove_photo' => t('remove_photo'), 'preparing_photos' => t('preparing_photos'), 'uploading_pct' => t('uploading_pct'), 'upload_failed' => t('upload_failed'), 'saving' => t('saving'), 'img_heic_client' => t('img_heic_client'),
     'v_password_match' => t('v_password_match'),
     'follow' => t('follow'), 'following' => t('following'), 'push_denied' => t('push_denied'),
-    'push_unsupported' => t('push_unsupported'), 'push_ios' => t('push_ios'), 'followed_toast' => t('followed_toast'),
+    'push_unsupported' => t('push_unsupported'), 'push_ios' => t('push_ios'), 'push_dismissed' => t('push_dismissed'), 'push_suppressed' => t('push_suppressed'), 'push_failed' => t('push_failed'), 'followed_toast' => t('followed_toast'),
     'unfollowed_toast' => t('unfollowed_toast'), 'news_on' => t('news_on'), 'news_off' => t('news_off'),
     'all_on' => t('all_on'), 'all_off' => t('all_off'), 'push_test_sent' => t('push_test_sent'), 'push_test_nosub' => t('push_test_nosub'),
     'no_follows' => t('no_follows'), 'no_feed' => t('no_feed'), 'unfollow' => t('unfollow'),
