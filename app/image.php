@@ -142,6 +142,36 @@ function process_logo_upload(array $file): string
 }
 
 /**
+ * Draw an office's default logo by hand (ring stamp in one of five colours with one of five emblems, see sk_logo)
+ * and store it as the office logo. Every office starts with one; uploading a logo replaces it.
+ * Never throws: an office without a logo still shows its initial.
+ */
+function office_draw_logo(int $officeId): ?string
+{
+    try {
+        require_once __DIR__ . '/sketch_scenes.php';
+        $colors = [[31, 86, 65], [176, 82, 44], [40, 96, 140], [180, 50, 42], [110, 80, 130]];
+        $tmp = sk_logo(9000 + $officeId, $officeId * 3 + intdiv($officeId, 5), $colors[$officeId % count($colors)], 256);
+        $im = imagecreatefromjpeg($tmp);
+        @unlink($tmp);
+        @unlink(substr($tmp, 0, -4));
+        $name = bin2hex(random_bytes(16)) . '.webp';
+        $ok = $im && imagewebp($im, ensure_upload_dir() . '/' . $name, (int) config('webp_quality'));
+        if ($im) {
+            imagedestroy($im);
+        }
+        if (!$ok) {
+            return null;
+        }
+        db()->prepare("UPDATE offices SET logo = ? WHERE id = ? AND (logo IS NULL OR logo = '')")->execute([$name, $officeId]);
+        return $name;
+    } catch (Throwable $e) {
+        error_log('aqarat office logo: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
  * Property photo: full size (fit 1600×1200) + 640×427 thumbnail, both WebP.
  * @return array{filename:string, thumb:string, width:int, height:int}
  * @throws ImageUploadException

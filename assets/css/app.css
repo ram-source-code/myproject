@@ -1327,3 +1327,6 @@ dialog:modal { overscroll-behavior: contain; }
 /* Woven band above the footer — Kurdish kilim motifs, drawn by hand */
 .site-footer { border-block-start: 0 !important; padding-block-start: 0 !important; }
 .site-footer::before { content: ""; display: block; block-size: 24px; background: url("../img/kilim.svg") repeat-x 0 50% / auto 24px; margin-block-end: 36px; }
+/* No photo yet: the drawn house with its sale board, not a generic image icon */
+.card-media-empty .art-spot { inline-size: min(62%, 220px); block-size: auto; aspect-ratio: 160 / 100; opacity: 1; }
+.gallery-empty .art-spot { inline-size: min(46%, 260px); block-size: auto; aspect-ratio: 160 / 100; }

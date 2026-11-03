@@ -70,7 +70,7 @@ $isLive = $p['status'] === 'published';
             </ol>
         </dialog>
     <?php else: ?>
-        <div class="gallery-empty"><svg aria-hidden="true"><use href="#i-image"></use></svg><p><?= e(t('no_photos')) ?></p></div>
+        <div class="gallery-empty"><?= render_partial('partials/art/empty') ?><p><?= e(t('no_photos')) ?></p></div>
     <?php endif; ?>
 
     <header class="property-head">

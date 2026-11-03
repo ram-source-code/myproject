@@ -37,6 +37,7 @@ function create_office(int $userId, string $name, string $phone = ''): int
     db()->prepare('INSERT INTO offices (user_id, name, slug, phone, whatsapp) VALUES (?,?,?,?,?)')
         ->execute([$userId, $name, office_slug($name), $phone, $phone]);
     $id = (int) db()->lastInsertId();
+    office_draw_logo($id);
     if (!defined('AQARAT_SEEDING')) {
         notify_admins_new_office($id, $name);
     }

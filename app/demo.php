@@ -1,26 +1,8 @@
 <?php
 declare(strict_types=1);
 
-/* Demo data: offices with logos, ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
+/* Demo data: offices (with their hand-drawn default logos), ~30 Kurdistan listings with hand-drawn (ink and watercolour) photos, a planted duplicate,
  * and (only when ffmpeg exists) short demo videos. Used by bin/seed.php --demo and the web installer. */
-
-function demo_logo(int $seed, string $letter): string
-{
-    $palette = [[15, 118, 110], [180, 83, 9], [29, 78, 216], [190, 18, 60], [109, 40, 217]];
-    [$r, $g, $b] = $palette[$seed % count($palette)];
-    $im = imagecreatetruecolor(400, 400);
-    imagefill($im, 0, 0, imagecolorallocate($im, $r, $g, $b));
-    $white = imagecolorallocate($im, 255, 255, 255);
-    // stylised roof + building blocks
-    imagefilledpolygon($im, [70, 200, 200, 80, 330, 200, 300, 200, 200, 115, 100, 200], $white);
-    imagefilledrectangle($im, 120, 210, 185, 320, $white);
-    imagefilledrectangle($im, 215, 210, 280, 320, $white);
-    imagefilledellipse($im, 320, 90, 50, 50, imagecolorallocate($im, 251, 191, 36));
-    $tmp = tempnam(sys_get_temp_dir(), 'aqlogo') . '.png';
-    imagepng($im, $tmp);
-    imagedestroy($im);
-    return $tmp;
-}
 
 /**
  * A demo listing photo: an ink-and-watercolour sketch of this kind of property as it really looks here
@@ -70,12 +52,9 @@ function seed_demo_data(int $adminId): void
         $exists = $pdo->prepare('SELECT id FROM offices WHERE user_id = ?');
         $exists->execute([$uid]);
         if (!$exists->fetchColumn()) {
-            $tmp = demo_logo($i, mb_substr($name, 0, 1));
-            $logo = process_logo_upload(['name' => 'logo.png', 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => filesize($tmp), 'type' => 'image/png']);
-            @unlink($tmp);
-            @unlink(substr($tmp, 0, -4));
-            $pdo->prepare('INSERT INTO offices (user_id, name, slug, logo, about, phone, whatsapp, address, city_id, is_verified) VALUES (?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$uid, $name, 'office-' . ($i + 1), $logo, $about, $ph, $ph, $addr, $cityId($cityEn), $verified]);
+            $pdo->prepare('INSERT INTO offices (user_id, name, slug, about, phone, whatsapp, address, city_id, is_verified) VALUES (?,?,?,?,?,?,?,?,?)')
+                ->execute([$uid, $name, 'office-' . ($i + 1), $about, $ph, $ph, $addr, $cityId($cityEn), $verified]);
+            office_draw_logo((int) $pdo->lastInsertId());
             $pdo->prepare("UPDATE offices SET activated_at = datetime('now') WHERE user_id = ?")->execute([$uid]);   // demo offices are paid up
         }
         $officeUsers[$cityEn][] = $uid;

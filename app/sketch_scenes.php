@@ -434,6 +434,10 @@ function sk_scene_villa(int $seed, bool $alt = false): string
         sk_solar($s, $front->pt($w * Sketch::r(0.12, 0.3), $h, -2)[0], $roofY - 0.1 * $m, $m);
     }
     sk_dish($s, $front->pt($w * 0.92, $h, -1)[0], $roofY, $m);
+    if ($alt) {
+        sk_villa_garden($s, $c, $front, $w);
+        return $s->save();
+    }
     // front wall with an iron railing on top and a steel gate; stops before the camera
     $wallZ = $z - Sketch::r(4.5, 6);
     $wall = new SketchFace($c, [$A[0] - 2, 0.0, $wallZ - 0.5], [cos($phi), 0.0, sin($phi)], $w + 4, 1.1);
@@ -474,6 +478,79 @@ function sk_scene_villa(int $seed, bool $alt = false): string
     sk_tree($s, $t[0], $t[1], $c->scaleAt($t[0] / $c->f, $wallZ - 1), Sketch::r(4, 5.2));
     sk_tufts($s, $c->p(0, 0, $wallZ - 0.5)[1], $c->p(0, 0, $wallZ - 0.6)[1] + 6, 12);
     return $s->save();
+}
+
+/** The villa's garden: lawn, paving and a swimming pool with ladder, loungers and a parasol. */
+function sk_villa_garden(Sketch $s, SketchCam $c, SketchFace $front, float $w): void
+{
+    $p = sk_pal();
+    $bottom = $s->H + 40;
+    // lawn from the house to the viewer
+    $base0 = $front->pt(-20, 0, 0);
+    $base1 = $front->pt($w + 20, 0, 0);
+    $s->wash([$base0, $base1, [$s->W + 40, $bottom], [-40, $bottom]], $p['green'], 90, 4, 0.4);
+    sk_tufts($s, max($base0[1], $base1[1]), $s->H, 30);
+    // pool set in a stone surround, in perspective on the ground in front of the house
+    $a0 = $w * Sketch::r(0.12, 0.25);
+    $a1 = $a0 + Sketch::r(7.5, 9);
+    $c0 = Sketch::r(2.4, 3.0);
+    $c1 = $c0 + Sketch::r(4.2, 5.2);
+    $sur = [$front->pt($a0 - 0.9, 0, $c0 - 0.9), $front->pt($a1 + 0.9, 0, $c0 - 0.9), $front->pt($a1 + 0.9, 0, $c1 + 0.9), $front->pt($a0 - 0.9, 0, $c1 + 0.9)];
+    $s->knockout($sur);
+    $s->poly($sur, true, 1.4);
+    $s->wash($sur, [226, 214, 190], 82, 1);
+    for ($a = $a0 - 0.9; $a < $a1 + 0.9; $a += 0.6) {          // paving joints
+        $s->line($front->pt($a, 0, $c0 - 0.9), $front->pt($a, 0, $c0 - 0.05), 0.5, 1);
+        $s->line($front->pt($a, 0, $c1 + 0.05), $front->pt($a, 0, $c1 + 0.9), 0.5, 1);
+    }
+    $water = [$front->pt($a0, 0, $c0), $front->pt($a1, 0, $c0), $front->pt($a1, 0, $c1), $front->pt($a0, 0, $c1)];
+    $s->poly($water, true, 1.7);
+    // far inner wall of the pool shows as a band below the coping
+    $inner = [$front->pt($a0, 0, $c0), $front->pt($a1, 0, $c0), $front->pt($a1, -0.35, $c0), $front->pt($a0, -0.35, $c0)];
+    $s->wash($water, [86, 166, 196], 66, 1);
+    $s->wash($inner, [60, 120, 160], 80, 0.5);
+    $s->line($front->pt($a0, -0.35, $c0), $front->pt($a1, -0.35, $c0), 0.9, 1);
+    for ($k = 0; $k < 14; $k++) {                                  // ripples and sky reflections
+        $ra = Sketch::r($a0 + 0.4, $a1 - 1.2);
+        $rc = Sketch::r($c0 + 0.4, $c1 - 0.3);
+        $s->curve([$front->pt($ra, 0, $rc), $front->pt($ra + 0.35, 0, $rc + 0.06), $front->pt($ra + 0.7, 0, $rc - 0.03), $front->pt($ra + 1.0, 0, $rc + 0.04)], 0.8, 40, 0.3);
+    }
+    $s->wash([$front->pt($a0 + 0.6, 0, $c0 + 0.5), $front->pt($a0 + 2.6, 0, $c0 + 0.5), $front->pt($a0 + 1.8, 0, $c1 - 0.6), $front->pt($a0 + 0.4, 0, $c1 - 0.8)], [236, 244, 246], 70, 1);
+    // ladder at the far edge
+    foreach ([0, 0.5] as $o) {
+        $la = $a1 - 1.4 + $o;
+        $s->curve([$front->pt($la, -0.3, $c0 + 0.05), $front->pt($la, 0.5, $c0 + 0.05), $front->pt($la, 0.75, $c0 - 0.2), $front->pt($la, 0.6, $c0 - 0.45)], 1.2, 10, 0.2);
+    }
+    // two loungers beside the pool and a parasol
+    for ($k = 0; $k < 2; $k++) {
+        $la = $a1 + 1.4 + $k * 0.9;
+        if ($la + 0.7 > $w + 4) {
+            break;
+        }
+        $seat = [$front->pt($la, 0.35, $c0 + 0.6), $front->pt($la + 0.7, 0.35, $c0 + 0.6), $front->pt($la + 0.7, 0.35, $c0 + 2.2), $front->pt($la, 0.35, $c0 + 2.2)];
+        $back = [$front->pt($la, 0.35, $c0 + 0.6), $front->pt($la + 0.7, 0.35, $c0 + 0.6), $front->pt($la + 0.7, 0.9, $c0 + 0.3), $front->pt($la, 0.9, $c0 + 0.3)];
+        foreach ([$seat, $back] as $q) {
+            $s->knockout($q);
+            $s->poly($q, true, 1.3);
+            $s->wash($q, [236, 232, 222], 84, 1);
+        }
+        foreach ([[$la + 0.05, $c0 + 2.1], [$la + 0.65, $c0 + 2.1], [$la + 0.05, $c0 + 0.7], [$la + 0.65, $c0 + 0.7]] as [$xa, $cc]) {
+            $s->line($front->pt($xa, 0, $cc), $front->pt($xa, 0.35, $cc), 0.9, 1);
+        }
+    }
+    $pa = $a1 + Sketch::r(1.8, 2.6);
+    $pole = [$front->pt($pa, 0, $c0 + 1.4), $front->pt($pa, 2.4, $c0 + 1.4)];
+    $s->line($pole[0], $pole[1], 1.3);
+    $m = abs($front->pt($pa + 1, 2.4, $c0 + 1.4)[0] - $pole[1][0]);
+    $top = $pole[1];
+    $canopy = [[$top[0] - 1.3 * $m, $top[1] + 0.35 * $m], [$top[0], $top[1] - 0.25 * $m], [$top[0] + 1.3 * $m, $top[1] + 0.35 * $m]];
+    $s->curve(array_merge($canopy, [[$top[0] + 0.6 * $m, $top[1] + 0.42 * $m], [$top[0], $top[1] + 0.32 * $m], [$top[0] - 0.6 * $m, $top[1] + 0.42 * $m], $canopy[0]]), 1.4, 10, 0.3);
+    $s->wash(array_merge($canopy, [[$top[0], $top[1] + 0.36 * $m]]), Sketch::pick([[228, 168, 60], [236, 232, 222], [184, 70, 56]]), 74, 1);
+    // a palm and an olive at the garden edge
+    $g = $front->pt(-1.2, 0, 2);
+    sk_palm($s, $g[0], $g[1], $c->scaleAt(0, 18), Sketch::r(6.5, 8));
+    $t = $front->pt($w + 2, 0, 5);
+    sk_tree($s, $t[0], $t[1], $c->scaleAt(0, 14), Sketch::r(4, 5));
 }
 
 /** House: concrete/plaster, one or two floors, flat roof with railing and tanks, yard wall with a sheet-steel door. */
@@ -1226,11 +1303,118 @@ function sk_scene_interior_work(int $seed, bool $office): string
     return $s->save();
 }
 
+/**
+ * An office logo drawn by hand: a ring stamp washed in the office colour with one emblem inside —
+ * a pointed-arch doorway with a key, a flat-roofed house with its water tank, the Citadel mound,
+ * a house under the mountains and the sun, or a minaret beside a roof.
+ */
+function sk_logo(int $seed, int $motif, array $rgb, int $size = 400): string
+{
+    $s = new Sketch($size, $size, $seed);
+    $W = $s->W;
+    $cx = $W / 2;
+    $cy = $W / 2;
+    $R = $W * 0.42;
+    $ring = [];
+    for ($i = 0; $i < 24; $i++) {
+        $a = M_PI * 2 * $i / 24;
+        $ring[] = [$cx + cos($a) * $R, $cy + sin($a) * $R];
+    }
+    $s->wash($ring, $rgb, 40, 3, 0.0);
+    $s->wash($ring, $rgb, 70, 4, 0.5);
+    $s->ellipse($cx, $cy, $R, $R, 3.2);
+    $s->ellipse($cx, $cy, $R * 0.9, $R * 0.9, 1.6);
+    $cream = [246, 238, 220];
+    $u = $W / 100;                   // emblem drawn on a 100-unit grid centred in the ring
+    $P = fn(float $x, float $y) => [$cx + ($x - 50) * $u, $cy + ($y - 50) * $u];
+    $fillCream = function (array $pts) use ($s, $P, $cream) {
+        $q = array_map(fn($p) => $P($p[0], $p[1]), $pts);
+        $s->knockout($q);
+        $s->wash($q, $cream, 20, 1.5, 0.0);
+        $s->poly($q, true, 3.0);
+        return $q;
+    };
+    $ground = fn() => $s->line($P(18, 74), $P(82, 74), 3.0);
+    switch ($motif % 5) {
+        case 0:   // pointed-arch doorway with a key
+            $arch = [[30, 74], [30, 44]];
+            for ($i = 1; $i < 10; $i++) {
+                $t = M_PI - M_PI * $i / 10;
+                $arch[] = [50 + cos($t) * 20, 44 - sin($t) * 24 * (1 - abs(cos($t)) * 0.1)];
+            }
+            $arch[] = [70, 44];
+            $arch[] = [70, 74];
+            $fillCream($arch);
+            $s->ellipse(...[...$P(50, 50), 6 * $u, 6 * $u, 3.0]);
+            $s->line($P(50, 56), $P(50, 70), 3.0);
+            $s->line($P(50, 64), $P(56, 64), 2.6);
+            $s->line($P(50, 69), $P(55, 69), 2.6);
+            $ground();
+            break;
+        case 1:   // flat-roofed house with a water tank and a dish
+            $fillCream([[24, 74], [76, 74], [76, 42], [24, 42]]);
+            $s->line($P(22, 42), $P(78, 42), 3.2);
+            foreach ([[30, 50], [60, 50]] as [$x, $y]) {
+                $q = array_map(fn($p) => $P($p[0], $p[1]), [[$x, $y], [$x + 10, $y], [$x + 10, $y + 9], [$x, $y + 9]]);
+                $s->poly($q, true, 2.4);
+            }
+            $s->poly(array_map(fn($p) => $P($p[0], $p[1]), [[45, 74], [55, 74], [55, 58], [45, 58]]), true, 2.6);
+            $tank = array_map(fn($p) => $P($p[0], $p[1]), [[56, 40], [68, 40], [68, 26], [56, 26]]);
+            $s->knockout($tank);
+            $s->wash($tank, $cream, 30, 1);
+            $s->poly($tank, true, 2.6);
+            $s->line($P(56, 31), $P(68, 31), 1.6, 1);
+            $s->line($P(34, 42), $P(34, 30), 2.2);
+            $s->ellipse(...[...$P(32, 28), 4 * $u, 5 * $u, 2.4]);
+            $ground();
+            break;
+        case 2:   // the Citadel: a mound ringed with house fronts
+            $mound = [[16, 76], [26, 58], [74, 58], [84, 76]];
+            $fillCream($mound);
+            $s->hatch(array_map(fn($p) => $P($p[0], $p[1]), $mound), 60, 4, 1.2, 0.8, 30);
+            $fillCream([[28, 58], [72, 58], [72, 40], [28, 40]]);
+            for ($x = 31; $x < 70; $x += 8) {
+                $s->curve([$P($x, 52), $P($x, 46), $P($x + 2.5, 43), $P($x + 5, 46), $P($x + 5, 52)], 2.2, 10, 0.3);
+            }
+            $s->curve([$P(44, 58), $P(44, 49), $P(50, 45), $P(56, 49), $P(56, 58)], 2.8, 6, 0.3);
+            $s->line($P(26, 40), $P(74, 40), 3.0);
+            break;
+        case 3:   // a house under the mountains and the sun
+            $s->curve([$P(16, 62), $P(32, 36), $P(44, 52), $P(58, 30), $P(84, 62)], 3.0, 6, 0.6);
+            $sun = $P(70, 28);
+            $s->ellipse($sun[0], $sun[1], 7 * $u, 7 * $u, 2.6);
+            $sunPts = [];
+            for ($i = 0; $i < 12; $i++) {
+                $a = M_PI * 2 * $i / 12;
+                $sunPts[] = [$sun[0] + cos($a) * 7 * $u, $sun[1] + sin($a) * 7 * $u];
+            }
+            $s->wash($sunPts, [232, 170, 50], 30, 1, 0.0);
+            $fillCream([[34, 76], [66, 76], [66, 58], [50, 46], [34, 58]]);
+            $s->poly(array_map(fn($p) => $P($p[0], $p[1]), [[46, 76], [54, 76], [54, 64], [46, 64]]), true, 2.6);
+            $ground();
+            break;
+        default:  // a minaret beside a flat roof
+            $fillCream([[42, 74], [52, 74], [51, 30], [43, 30]]);
+            $s->line($P(40, 30), $P(54, 30), 3.0);
+            $s->line($P(44, 30), $P(47, 20), 2.6);
+            $s->line($P(50, 30), $P(47, 20), 2.6);
+            for ($y = 38; $y < 70; $y += 6) {
+                $s->line($P(43, $y), $P(51, $y + 4), 1.4, 1);
+                $s->line($P(51, $y), $P(43, $y + 4), 1.4, 1);
+            }
+            $fillCream([[54, 74], [80, 74], [80, 52], [54, 52]]);
+            $s->poly(array_map(fn($p) => $P($p[0], $p[1]), [[63, 74], [71, 74], [71, 62], [63, 62]]), true, 2.6);
+            $fillCream([[20, 74], [40, 74], [40, 58], [20, 58]]);
+            $ground();
+    }
+    return $s->save();
+}
+
 /** Which drawings a listing of this type gets, in order (cover first). */
 function sk_scenes_for(string $type): array
 {
     return match ($type) {
-        'villa'     => ['villa', 'living', 'kitchen', 'villa_alt'],
+        'villa'     => ['villa', 'villa_alt', 'living', 'kitchen'],   // the garden view shows the pool
         'house'     => ['house', 'living', 'kitchen', 'house_alt'],
         'apartment' => ['towers', 'living', 'kitchen', 'towers_alt'],
         'shop'      => ['shops', 'shop_inside', 'shops'],

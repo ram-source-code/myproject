@@ -11,7 +11,7 @@ $headingTag = $headingTag ?? 'h3';
             <img class="card-photo" src="<?= e(upload_url($p['cover_thumb'])) ?>" alt="" width="640" height="427"
                  <?= !empty($priority) ? 'fetchpriority="high"' : 'loading="lazy"' ?> decoding="async">
         <?php else: ?>
-            <div class="card-media-empty"><svg aria-hidden="true"><use href="#i-image"></use></svg></div>
+            <div class="card-media-empty"><?= render_partial('partials/art/empty') ?></div>
         <?php endif; ?>
         <div class="card-badges">
             <span class="badge badge-<?= e($p['purpose']) ?>"><?= e(t('purpose_' . $p['purpose'])) ?></span>

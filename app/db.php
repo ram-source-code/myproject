@@ -469,6 +469,13 @@ function migrations(): array
         ALTER TABLE payments ADD COLUMN kind TEXT NOT NULL DEFAULT 'plan';
         ALTER TABLE payments ADD COLUMN property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL;
         SQL,
+        // v10 — every office has a logo: those without one get a hand-drawn stamp (uploading one replaces it)
+        static function (PDO $pdo): void {
+            $ids = $pdo->query("SELECT id FROM offices WHERE logo IS NULL OR logo = ''")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($ids as $id) {
+                office_draw_logo((int) $id);
+            }
+        },
     ];
 }
 
