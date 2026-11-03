@@ -682,6 +682,9 @@ function maintenance_work(): void
         $pdo->prepare('DELETE FROM hits WHERE t < ?')->execute([time() - 86400]);
         $pdo->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 86400]);
         maintenance_stale_listings($pdo);
+        page_cache_bump();                               // listings may have been hidden or unfeatured
+        page_cache_cleanup();
+        $pdo->exec("UPDATE properties SET is_featured = 0, featured_until = NULL WHERE is_featured = 1 AND featured_until IS NOT NULL AND featured_until <= datetime('now')");
         maintenance_backup($pdo);
         // Keep the query planner's statistics fresh (cheap: re-analyses only tables that changed a lot),
         // and fold the WAL back into the database file so it stays small.
@@ -833,4 +836,39 @@ function price_drop(array $p): ?array
     $cur = $p['currency'] ?? 'USD';
     $was = $cur === 'IQD' ? money(round($prev * max(1, (int) config('iqd_per_usd')), -3), 'IQD') : money($prev, 'USD');
     return ['pct' => (int) round((1 - $now / $prev) * 100), 'was' => $was];
+}
+
+/** Can offices create their own account (and pay remotely), or does the admin set them up in person? */
+function office_signup_open(): bool
+{
+    return config('office_signup') === 'open';
+}
+
+/** Easy to read out loud or type on a phone: e.g. "k7qm-3xpa-29" (no 0/o, 1/l look-alikes). */
+function readable_password(): string
+{
+    $a = 'abcdefghjkmnpqrstuvwxyz23456789';
+    $p = '';
+    for ($i = 0; $i < 10; $i++) {
+        $p .= $a[random_int(0, strlen($a) - 1)];
+    }
+    return substr($p, 0, 4) . '-' . substr($p, 4, 4) . '-' . substr($p, 8);
+}
+
+/** Account by phone number (any format: 0750…, +964 750…, Eastern Arabic digits). */
+function user_by_phone(string $phone): ?array
+{
+    $want = phone_intl($phone);
+    if (strlen($want) < 12) {
+        return null;
+    }
+    $st = db()->query("SELECT id, phone FROM users WHERE phone IS NOT NULL AND phone != ''");
+    foreach ($st as $r) {
+        if (phone_intl((string) $r['phone']) === $want) {
+            $u = db()->prepare('SELECT * FROM users WHERE id = ?');
+            $u->execute([$r['id']]);
+            return $u->fetch() ?: null;
+        }
+    }
+    return null;
 }

@@ -17,6 +17,9 @@ $wa = $o['whatsapp'] ?: $o['phone'];
                 <?= e($o['name']) ?>
                 <?php if ($o['is_verified']): ?><svg class="verified verified-lg" aria-label="<?= e(t('verified')) ?>" role="img"><use href="#i-verified"></use></svg><?php endif; ?>
             </h1>
+            <?php if ($o['is_verified']): ?>
+                <p class="verified-note"><svg aria-hidden="true"><use href="#i-verified"></use></svg><?= e(t('verified_visited', ['app' => app_name(), 'date' => $o['verified_at'] ? substr($o['verified_at'], 0, 10) : ''])) ?></p>
+            <?php endif; ?>
             <p class="office-meta">
                 <?php if (city_name($o) !== ''): ?><span><svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e(implode('، ', array_filter([$o['address'], city_name($o)]))) ?></span><?php endif; ?>
                 <span><svg aria-hidden="true"><use href="#i-home"></use></svg><?= e(t('n_listings', ['n' => (int) $o['listings']])) ?></span>

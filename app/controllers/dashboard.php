@@ -343,7 +343,7 @@ function dash_password_update(): void
         with_old([], $errors);
         redirect(url('dashboard/profile') . '#password');
     }
-    db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($new, PASSWORD_ALGO), $u['id']]);
+    db()->prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')->execute([password_hash($new, PASSWORD_ALGO), $u['id']]);
     login_user((int) $u['id']); // new session id
     flash('success', t('password_saved'));
     redirect(url('dashboard/profile'));

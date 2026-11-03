@@ -34,7 +34,8 @@ def login(s, email, pw):
 
 def php(code):
     """Run PHP inside the app (as the web server user) and return its JSON output."""
-    full = 'define("AQARAT_CLI", true); require ' + json.dumps(APP + '/app/bootstrap.php') + '; ' + code
+    # direct database edits don't go through a POST, so also tell the page cache that something changed
+    full = 'define("AQARAT_CLI", true); require ' + json.dumps(APP + '/app/bootstrap.php') + '; page_cache_bump(); ' + code
     cmd = (['sudo', '-u', PHP_AS] if PHP_AS else []) + ['php', '-r', full]
     out = subprocess.run(cmd, capture_output=True, text=True, cwd=APP).stdout.strip().splitlines()
     return json.loads(out[-1]) if out else None
@@ -177,6 +178,69 @@ home = anon.get(B + '/?lang=en').text
 ok(re.search(r'rel="preload" href="[^"?]+\.woff2" as="font"', home), 'font preload has no ?lang= (matches the CSS URL)')
 r = o.post(B + '/dashboard/office', data={'_csrf': tok(o.get(B + '/dashboard/office').text), 'name': 'x'}, headers={'X-AQ-Upload': '1'})
 ok(r.headers.get('Content-Type', '').startswith('application/json') and 'redirect' in r.json(), 'upload requests get the redirect as JSON (flash survives)')
+
+# ── Offices set up in person (default) — public sign-up makes customer accounts only
+adm = sess(); login(adm, 'admin@aqarat.local', ADMIN_PW)
+adm.post(B + '/admin/offices/signup-mode', data={'_csrf': tok(adm.get(B + '/admin/offices').text), 'mode': 'admin'})
+rp = sess().get(B + '/register').text
+ok('value="agent"' not in rp and 'visit you in person' in rp, 'sign-up offers no office account; explains the in-person visit')
+g = sess(); rp = g.get(B + '/register').text; time.sleep(3.3)
+g.post(B + '/register', data={'_csrf': tok(rp), '_ft': re.search(r'name="_ft" value="([^"]+)"', rp).group(1), 'name': 'Sneaky', 'email': 'sneaky@example.com',
+                              'role': 'agent', 'office_name': 'Fake Realty', 'password': 'secret123', 'password_confirm': 'secret123'})
+ok(php("echo json_encode(db()->query(\"SELECT role FROM users WHERE email = 'sneaky@example.com'\")->fetchColumn());") == 'user'
+   and not php("echo json_encode((bool) db()->query(\"SELECT 1 FROM offices WHERE name = 'Fake Realty'\")->fetchColumn());"), 'posting role=agent still makes a customer account')
+ap = adm.get(B + '/admin/offices').text
+r = adm.post(B + '/admin/offices/new', data={'_csrf': tok(ap), 'office_name': 'Zagros Realty', 'owner_name': 'Shwan', 'phone': '0750 987 6543',
+                                              'city_id': '1', 'months': '3', 'amount': '90000', 'currency': 'IQD', 'visited': '1'})
+temp = re.search(r'class="activation-code">([a-z2-9-]+)<', r.text)
+ok(temp and 'wa.me/9647509876543?text=' in r.text, 'admin creates the office in person: temporary password + WhatsApp message')
+r = adm.post(B + '/admin/offices/new', data={'_csrf': tok(adm.get(B + '/admin/offices').text), 'office_name': 'Dup', 'owner_name': 'Dup', 'phone': '+964 750 987 6543'})
+ok(php("echo json_encode((int) db()->query(\"SELECT COUNT(*) FROM offices WHERE name = 'Dup'\")->fetchColumn());") == 0, 'the same phone cannot get a second account')
+z = sess(); r = login(z, '٠٧٥٠ ٩٨٧ ٦٥٤٣', temp.group(1))
+ok(r.url.endswith('/dashboard/profile#password') or r.url.endswith('/dashboard/profile'), 'office signs in with its phone (Eastern Arabic digits) and is asked for its own password')
+ok('/dashboard/profile' in z.get(B + '/dashboard/properties/new').url, 'nothing else opens until the password is changed')
+z.post(B + '/dashboard/password', data={'_csrf': tok(z.get(B + '/dashboard/profile').text), 'current_password': temp.group(1), 'password': 'zagros-own-99', 'password_confirm': 'zagros-own-99'})
+ok(z.get(B + '/dashboard/properties/new').url.endswith('/dashboard/properties/new'), 'after choosing a password the office can post (active, paid 3 months)')
+zoid = php("echo json_encode((int) db()->query(\"SELECT id FROM offices WHERE name = 'Zagros Realty'\")->fetchColumn());")
+op = sess().get(B + f'/office/{zoid}').text
+ok('visited this office in person on' in op, 'public page: verified, visited in person, with the date')
+r = adm.post(B + f'/admin/offices/{zoid}/password', data={'_csrf': tok(adm.get(B + '/admin/offices').text)})
+temp2 = re.search(r'class="activation-code">([a-z2-9-]+)<', r.text).group(1)
+ok('/login' in login(sess(), '07509876543', 'zagros-own-99').url and '/dashboard/profile' in login(sess(), '07509876543', temp2).url,
+   'forgotten password: admin makes a new temporary one, the old password stops working')
+adm.post(B + '/admin/offices/signup-mode', data={'_csrf': tok(adm.get(B + '/admin/offices').text), 'mode': 'open'})
+ok('value="agent"' in sess().get(B + '/register').text, 'switching to "anyone can sign up" brings the office option back')
+adm.post(B + '/admin/offices/signup-mode', data={'_csrf': tok(adm.get(B + '/admin/offices').text), 'mode': 'admin'})
+
+# ── Paid featured listings
+fp = php("echo json_encode((int) db()->query(\"SELECT id FROM properties WHERE status = 'published' AND is_featured = 0 ORDER BY id LIMIT 1\")->fetchColumn());")
+adm.post(B + f'/admin/properties/{fp}/feature', data={'_csrf': tok(adm.get(B + '/admin/properties').text), 'days': '7', 'amount': '25000', 'currency': 'IQD'})
+f1 = php(f"echo json_encode(db()->query('SELECT is_featured, featured_until FROM properties WHERE id = {fp}')->fetch());")
+adm.post(B + f'/admin/properties/{fp}/feature', data={'_csrf': tok(adm.get(B + '/admin/properties').text), 'days': '7'})
+f2 = php(f"echo json_encode(db()->query('SELECT featured_until FROM properties WHERE id = {fp}')->fetchColumn());")
+ok(f1['is_featured'] == 1 and f1['featured_until'] and f2 > f1['featured_until'], 'featured for 7 days; featuring again extends it')
+ok(php(f"echo json_encode((int) db()->query(\"SELECT COUNT(*) FROM payments WHERE kind = 'featured' AND property_id = {fp} AND amount = 25000\")->fetchColumn());") == 1
+   and '★' in adm.get(B + '/admin/offices').text, 'the feature payment is logged and shown in Payments')
+php(f"db()->exec(\"UPDATE properties SET featured_until = datetime('now', '-1 hour') WHERE id = {fp}\"); echo 1;")
+php("maintenance_work(); echo 1;")
+ok(php(f"echo json_encode((int) db()->query('SELECT is_featured FROM properties WHERE id = {fp}')->fetchColumn());") == 0, 'the daily job ends a feature when its time is up')
+
+# ── Skeletons where content loads after the page
+ok('sk-row' in sess().get(B + '/notifications').text, 'notifications lists show skeleton rows while loading')
+ok('results-map is-loading' in sess().get(B + '/properties?view=map').text, 'map shows a loading shimmer until pins arrive')
+
+# ── Short cache for signed-out visitors
+g1, g2 = sess(), sess()
+r1 = g1.get(B + '/offices'); r2 = g2.get(B + '/offices')
+ok(r2.headers.get('X-Page-Cache') == 'HIT' and meta_tok(r1.text) != meta_tok(r2.text), 'second visitor gets the cached page with their own security token')
+ok(g2.post(B + '/push/status', json={'endpoint': 'x'}, headers={'X-CSRF-Token': meta_tok(r2.text), 'Accept': 'application/json'}).status_code != 403, 'the token in a cached page works')
+ok(sess().get(B + '/offices').headers.get('X-Page-Cache') == 'HIT', 'beacons do not empty the cache')
+adm.post(B + '/admin/offices/signup-mode', data={'_csrf': tok(adm.get(B + '/admin/offices').text), 'mode': 'admin'})
+ok(sess().get(B + '/offices').headers.get('X-Page-Cache') != 'HIT', 'any change empties the cache at once')
+ok(adm.get(B + '/offices').headers.get('X-Page-Cache') != 'HIT' and adm.get(B + '/offices').headers.get('X-Page-Cache') != 'HIT', 'signed-in pages are never cached')
+lp = php("echo json_encode((int) db()->query(\"SELECT id FROM properties WHERE status = 'published' LIMIT 1\")->fetchColumn());")
+ok(all(sess().get(B + f'/property/{lp}').headers.get('X-Page-Cache') != 'HIT' for _ in range(2)), 'listing pages are never cached (views, enquiry form)')
+ok(all(sess().get(B + '/properties?q=villa').headers.get('X-Page-Cache') != 'HIT' for _ in range(2)), 'free-text searches are not cached')
 
 print(f'\n{fails} failure(s)')
 sys.exit(1 if fails else 0)

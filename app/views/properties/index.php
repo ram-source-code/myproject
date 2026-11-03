@@ -188,7 +188,7 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
         <h2 id="results-h" class="visually-hidden"><?= e(t('results')) ?></h2>
         <?php if ($viewMode === 'map'): ?>
             <div class="map-wrap">
-                <div id="results-map" class="results-map" data-map-results
+                <div id="results-map" class="results-map is-loading" data-map-results
                      data-endpoint="<?= e(url('api/map', $query)) ?>"
                      data-near="<?= e($f['near']) ?>" data-radius="<?= (int) ($f['r'] ?? 0) ?>"
                      data-search-area="<?= e(url('properties', array_diff_key($query, ['near' => 1, 'r' => 1, 'sort' => 1]) + ['view' => 'map'])) ?>"

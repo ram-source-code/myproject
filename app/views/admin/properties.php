@@ -50,11 +50,23 @@
                             </form>
                         </td>
                         <td data-label="<?= e(t('featured')) ?>">
-                            <form method="post" action="<?= e(url('admin/properties/' . $p['id'] . '/feature')) ?>">
+                            <?php if ($p['is_featured']): ?>
+                                <p class="small"><span class="badge badge-featured"><svg aria-hidden="true"><use href="#i-star"></use></svg><?= e(t('featured')) ?></span>
+                                    <span class="muted"><?= e($p['featured_until'] ? t('until_date', ['date' => substr($p['featured_until'], 0, 10)]) : t('no_end_date')) ?></span></p>
+                            <?php endif; ?>
+                            <form method="post" action="<?= e(url('admin/properties/' . $p['id'] . '/feature')) ?>" class="code-form">
                                 <?= csrf_field() ?>
-                                <button class="btn btn-ghost btn-sm star-toggle" type="submit" aria-pressed="<?= $p['is_featured'] ? 'true' : 'false' ?>">
-                                    <svg aria-hidden="true"><use href="#i-star"></use></svg><span class="visually-hidden"><?= e(t('featured')) ?>: <?= e($p['title']) ?></span>
-                                </button>
+                                <label class="visually-hidden" for="fd-<?= (int) $p['id'] ?>"><?= e(t('feature_length')) ?>: <?= e($p['title']) ?></label>
+                                <select id="fd-<?= (int) $p['id'] ?>" name="days">
+                                    <?php foreach (FEATURE_DAYS as $fd): ?><option value="<?= $fd ?>"><?= e(t('days_n', ['n' => $fd])) ?></option><?php endforeach; ?>
+                                    <option value="0"><?= e(t('until_stopped')) ?></option>
+                                </select>
+                                <label class="visually-hidden" for="fa-<?= (int) $p['id'] ?>"><?= e(t('amount_paid')) ?>: <?= e($p['title']) ?></label>
+                                <input id="fa-<?= (int) $p['id'] ?>" class="amount-input" name="amount" type="number" inputmode="numeric" min="0" step="1" dir="ltr" placeholder="<?= e(t('amount_paid_optional')) ?>">
+                                <label class="visually-hidden" for="fc-<?= (int) $p['id'] ?>"><?= e(t('currency')) ?></label>
+                                <select id="fc-<?= (int) $p['id'] ?>" name="currency"><option value="IQD">IQD</option><option value="USD">USD</option></select>
+                                <button class="btn btn-outline btn-sm" type="submit"><svg aria-hidden="true"><use href="#i-star"></use></svg><?= e(t($p['is_featured'] ? 'extend' : 'feature_it')) ?><span class="visually-hidden">: <?= e($p['title']) ?></span></button>
+                                <?php if ($p['is_featured']): ?><button class="btn btn-ghost btn-sm" type="submit" name="action" value="stop"><?= e(t('stop')) ?><span class="visually-hidden">: <?= e($p['title']) ?></span></button><?php endif; ?>
                             </form>
                         </td>
                         <td class="row-actions">

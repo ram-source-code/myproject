@@ -24,8 +24,11 @@ function login_throttled(string $email): bool
 
 function login_submit(): void
 {
-    $email = mb_strtolower(mb_substr(input('email'), 0, 150));
+    $email = mb_strtolower(mb_substr(trim(input('email')), 0, 150));
     $password = (string) ($_POST['password'] ?? '');
+    if ($email !== '' && !str_contains($email, '@') && ($byPhone = user_by_phone($email))) {
+        $email = mb_strtolower((string) $byPhone['email']);       // offices may sign in with their phone number
+    }
 
     if (login_throttled($email)) {
         with_old(['email' => $email], ['email' => t('login_throttled', ['min' => (int) (config('login_window_sec') / 60)])]);
@@ -63,8 +66,20 @@ function login_submit(): void
         redirect(url('login/code'));
     }
     login_user((int) $u['id']);
+    after_sign_in((int) $u['id'], is_string($intended) ? $intended : url('dashboard'));
+}
+
+/** Welcome message, or straight to "choose your own password" for accounts the admin set up. */
+function after_sign_in(int $userId, string $next): never
+{
+    $st = db()->prepare('SELECT must_change_password FROM users WHERE id = ?');
+    $st->execute([$userId]);
+    if ((int) $st->fetchColumn() === 1) {
+        flash('info', t('choose_own_password'));
+        redirect(url('dashboard/profile') . '#password');
+    }
     flash('success', t('welcome_back'));
-    redirect(is_string($intended) ? $intended : url('dashboard'));
+    redirect($next);
 }
 
 /** Step 2 of signing in, for accounts with two-step login on. */
@@ -115,8 +130,7 @@ function login_code_submit(): void
     }
     unset($_SESSION['_2fa']);
     login_user($uid);
-    flash('success', t('welcome_back'));
-    redirect(is_string($p['next']) ? $p['next'] : url('dashboard'));
+    after_sign_in($uid, is_string($p['next']) ? $p['next'] : url('dashboard'));
 }
 
 function register_form(): void
@@ -124,7 +138,7 @@ function register_form(): void
     if (current_user()) {
         redirect(url('dashboard'));
     }
-    render('auth/register', ['pageTitle' => t('register') . ' — ' . app_name()]);
+    render('auth/register', ['pageTitle' => t('register') . ' — ' . app_name(), 'adminWa' => admin_whatsapp()]);
 }
 
 function register_submit(): void
@@ -133,7 +147,8 @@ function register_submit(): void
         'name'  => mb_substr(input('name'), 0, 100),
         'email' => mb_strtolower(mb_substr(input('email'), 0, 150)),
         'phone' => mb_substr(convert_arabic_digits(input('phone')), 0, 30),
-        'role'  => input('role') === 'agent' ? 'agent' : 'user',
+        // While the admin sets offices up in person, public sign-up only makes customer accounts.
+        'role'  => input('role') === 'agent' && office_signup_open() ? 'agent' : 'user',
         'office_name' => mb_substr(input('office_name'), 0, 100),
     ];
     $password = (string) ($_POST['password'] ?? '');

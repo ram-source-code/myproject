@@ -10,6 +10,7 @@ require __DIR__ . '/models.php';
 require __DIR__ . '/push.php';
 require __DIR__ . '/geo.php';
 require __DIR__ . '/totp.php';
+require __DIR__ . '/pagecache.php';
 
 date_default_timezone_set(config('timezone', 'UTC'));
 mb_internal_encoding('UTF-8');

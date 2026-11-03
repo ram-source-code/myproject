@@ -36,6 +36,11 @@ def admin_activate(adm, office_id, months='1'):
     page = adm.get(B + '/admin/offices').text
     return adm.post(B + f'/admin/offices/{office_id}/activate', data={'_csrf': tok(page), 'months': months})
 
+# ── This suite signs offices up through the public form: open office sign-up first (default is admin-only)
+_adm = sess(); login(_adm, 'admin@aqarat.local', ADMIN_PW)
+_r = _adm.post(B + '/admin/offices/signup-mode', data={'_csrf': tok(_adm.get(B + '/admin/offices').text), 'mode': 'open'})
+ok('value="open" checked' in _adm.get(B + '/admin/offices').text, 'admin switches office sign-up to open')
+
 # ── Base path & PWA
 anon = sess()
 r = anon.get(B + '/')

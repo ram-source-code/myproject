@@ -143,5 +143,5 @@
         <h2 id="cta-h"><?= e(t('cta_title')) ?></h2>
         <p><?= e(t('cta_text')) ?></p>
     </div>
-    <a class="btn btn-light btn-lg" href="<?= e(can_post_listings(current_user()) ? url('dashboard/properties/new') : (current_user() ? url('dashboard/office') : url('register', ['type' => 'office']))) ?>"><?= e(t('cta_button')) ?></a>
+    <a class="btn btn-light btn-lg" href="<?= e(can_post_listings(current_user()) ? url('dashboard/properties/new') : (office_signup_open() ? (current_user() ? url('dashboard/office') : url('register', ['type' => 'office'])) : url('register') . '#for-offices')) ?>"><?= e(t('cta_button')) ?></a>
 </section>

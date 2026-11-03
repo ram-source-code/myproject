@@ -158,6 +158,9 @@ function dash_office_save(): void
     }
 
     $o = office_for_user((int) $u['id']);
+    if (!$o && !office_signup_open() && $u['role'] !== 'admin') {
+        abort(403);                       // offices are set up by the admin in person for now
+    }
     if (!$o) {
         create_office((int) $u['id'], $d['name']);
         $o = office_for_user((int) $u['id']);
