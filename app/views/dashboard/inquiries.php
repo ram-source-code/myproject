@@ -34,7 +34,7 @@
             </ul>
         <?php else: ?>
             <div class="empty-state">
-                <svg aria-hidden="true"><use href="#i-mail"></use></svg>
+                <?= render_partial('partials/art/empty') ?>
                 <p><?= e(t('no_inquiries')) ?></p>
             </div>
         <?php endif; ?>

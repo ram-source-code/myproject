@@ -224,7 +224,7 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                 <?= render_partial('partials/pagination', ['pg' => $pg, 'base' => 'properties', 'query' => $query]) ?>
             <?php else: ?>
                 <div class="empty-state">
-                    <svg aria-hidden="true"><use href="#i-search"></use></svg>
+                    <?= render_partial('partials/art/empty') ?>
                     <p><?= e(t('no_results')) ?></p>
                     <a class="btn btn-outline" href="<?= e(url('properties')) ?>"><?= e(t('reset_filters')) ?></a>
                 </div>

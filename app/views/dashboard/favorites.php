@@ -10,7 +10,7 @@
             </div>
         <?php else: ?>
             <div class="empty-state">
-                <svg aria-hidden="true"><use href="#i-heart"></use></svg>
+                <?= render_partial('partials/art/empty') ?>
                 <p><?= e(t('no_favorites')) ?></p>
                 <a class="btn btn-primary" href="<?= e(url('properties')) ?>"><?= e(t('browse_listings')) ?></a>
             </div>

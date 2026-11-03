@@ -29,7 +29,7 @@
         </ul>
     <?php else: ?>
         <div class="empty-state">
-            <svg aria-hidden="true"><use href="#i-building"></use></svg>
+            <?= render_partial('partials/art/empty') ?>
             <p><?= e(t('no_offices')) ?></p>
         </div>
     <?php endif; ?>
