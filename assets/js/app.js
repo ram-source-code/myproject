@@ -299,41 +299,86 @@
         t.addEventListener('input', upd); b.addEventListener('input', upd); upd();
     });
 
-    /* ---------- Image upload: drag & drop + previews ---------- */
+    /* ---------- Image upload: gallery + camera + drag & drop, one combined list with previews ---------- */
     const dz = $('[data-dropzone]');
     if (dz) {
         const input = $('input[type=file]', dz);
+        const camera = $('[data-camera]');
         const preview = $('[data-preview]');
         const status = $('#upload-status');
         const maxBytes = Number(input.dataset.maxBytes);
         const maxFiles = Number(input.dataset.maxFiles);
+        const canMerge = typeof DataTransfer === 'function' && (() => { try { return Boolean(new DataTransfer().files); } catch { return false; } })();
+        const isHeic = (f) => /^image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name);
+        let picked = [];
         let urls = [];
+        const key = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+        const sync = () => {
+            if (!canMerge) return;
+            const dt = new DataTransfer();
+            picked.forEach((f) => dt.items.add(f));
+            input.files = dt.files;
+        };
         const render = () => {
             urls.forEach(URL.revokeObjectURL);
             urls = [];
             preview.replaceChildren();
-            const files = [...input.files];
+            const files = canMerge ? picked : [...input.files];
             const msgs = [tr('files_selected', { n: files.length })];
             if (files.length > maxFiles) msgs.push(tr('too_many_files', { n: maxFiles }));
-            files.forEach((f) => {
+            files.forEach((f, i) => {
                 const u = URL.createObjectURL(f);
                 urls.push(u);
                 const li = el('li', {}, el('img', { src: u, alt: f.name }));
                 if (f.size > maxBytes) { li.classList.add('is-bad'); msgs.push(tr('file_too_big', { name: f.name })); }
+                if (isHeic(f)) { li.classList.add('is-bad'); msgs.push(tr('img_heic_client', { name: f.name })); }
+                if (canMerge) {
+                    const rm = el('button', { type: 'button', class: 'preview-remove', 'aria-label': `${tr('remove_photo')} ${i + 1}` }, '×');
+                    rm.addEventListener('click', () => { picked.splice(i, 1); sync(); render(); });
+                    li.append(rm);
+                }
                 preview.append(li);
             });
             status.textContent = files.length ? msgs.join(' · ') : '';
         };
-        input.addEventListener('change', render);
+        // Adds instead of replacing, so several camera shots and gallery picks end up in one listing.
+        const add = (files) => {
+            const have = new Set(picked.map(key));
+            [...files].filter((f) => f.type.startsWith('image/') && !have.has(key(f))).forEach((f) => picked.push(f));
+            sync();
+            render();
+        };
+        input.addEventListener('change', () => (canMerge ? add(input.files) : render()));
+        if (camera) {
+            if (canMerge) {
+                camera.addEventListener('change', () => { add(camera.files); camera.value = ''; });
+            } else {
+                camera.name = 'images[]';            // very old browsers: send the shot as its own field
+            }
+        }
         ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('is-dragover'); }));
         ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, () => dz.classList.remove('is-dragover')));
         dz.addEventListener('drop', (e) => {
             e.preventDefault();
-            const dt = new DataTransfer();
-            [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/')).forEach((f) => dt.items.add(f));
-            input.files = dt.files;
-            render();
+            if (canMerge) add(e.dataTransfer.files);
         });
+    }
+
+    /* ---------- Video: recorded clips join the chosen ones ---------- */
+    const vidInput = $('[data-video-input]');
+    const vidCam = $('[data-video-camera]');
+    if (vidInput && vidCam) {
+        if (typeof DataTransfer === 'function') {
+            vidCam.addEventListener('change', () => {
+                const dt = new DataTransfer();
+                [...vidInput.files, ...vidCam.files].forEach((f) => dt.items.add(f));
+                vidInput.files = dt.files;
+                vidCam.value = '';
+                vidInput.dispatchEvent(new Event('change'));
+            });
+        } else {
+            vidCam.name = 'videos[]';
+        }
     }
 
     /* ---------- Mobile photo strip: position counter ---------- */

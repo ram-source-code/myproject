@@ -1244,3 +1244,14 @@ dialog:modal { overscroll-behavior: contain; }
 .alert .btn { margin-inline-start: auto; }
 .count-badge { display: inline-grid; place-items: center; min-inline-size: 1.4em; padding: 0 6px; border-radius: 999px; background: #b91c1c; color: #fff; font-size: 0.75rem; font-weight: 700; line-height: 1.5; }
 .code-panel:focus { outline: none; }
+
+/* Camera capture (phones/tablets only — on a computer "capture" just opens the file picker again) */
+.camera-row { display: none; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block-start: 12px; }
+@media (pointer: coarse) { .camera-row { display: flex; } }
+.camera-btn { min-block-size: 48px; }
+.camera-row:has(input:focus-visible) .camera-btn { outline: 3px solid var(--brand); outline-offset: 2px; }
+.preview-remove {
+    position: absolute; inset-block-start: 6px; inset-inline-end: 6px; inline-size: 36px; block-size: 36px;
+    border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.65); color: #fff; font-size: 1.4rem; line-height: 1; cursor: pointer;
+}
+.preview-remove:focus-visible { outline: 3px solid #fff; outline-offset: 1px; }

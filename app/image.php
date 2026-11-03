@@ -77,6 +77,9 @@ function load_uploaded_image(array $file, int $minW = 200, int $minH = 150): GdI
     }
 
     $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmp);
+    if (in_array($mime, ['image/heic', 'image/heif', 'image/heic-sequence', 'image/avif'], true)) {
+        throw new ImageUploadException(t('img_heic'));          // GD can't read these: say how to fix it
+    }
     if (!isset(ALLOWED_IMAGE_MIME[$mime])) {
         throw new ImageUploadException(t('img_bad_type'));
     }
