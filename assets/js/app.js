@@ -50,7 +50,9 @@
         $$('.toast').forEach((t) => t.remove());
         const t = el('div', { class: 'toast', role: 'status', text: msg });
         document.body.append(t);
-        setTimeout(() => t.remove(), 3200);
+        // long enough to read: ~1 s per 15 characters, 3.2–12 s; a tap dismisses it
+        t.addEventListener('click', () => t.remove());
+        setTimeout(() => t.remove(), Math.min(12000, Math.max(3200, String(msg).length * 65)));
     }
 
     /* ---------- Dominant-colour placeholders (computed at upload) ---------- */
@@ -674,17 +676,37 @@
             throw Object.assign(new Error(''), { silent: true });
         }
         if (!pushSupported) throw new Error(tr('push_unsupported'));
-        const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-        if (perm !== 'granted') throw new Error(tr('push_denied'));
-        const reg = await navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' });
-        await navigator.serviceWorker.ready;
-        const existing = await renewIfStale(reg, await reg.pushManager.getSubscription());
-        if (existing) return existing;
-        // Some browsers (or blocked push services) never settle: fail clearly instead of hanging.
-        return Promise.race([
-            reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(meta('vapid-key')) }),
-            new Promise((_, rej) => setTimeout(() => rej(new Error(tr('push_unsupported'))), 15000)),
-        ]);
+        // Ask first, straight from the tap: anything awaited before this and browsers drop the prompt.
+        const was = Notification.permission;
+        let perm = was;
+        let asked = 0;
+        if (was === 'default') {
+            const t = performance.now();
+            try { perm = await Notification.requestPermission(); } catch { perm = Notification.permission; }
+            asked = performance.now() - t;
+        }
+        if (perm === 'denied') throw new Error(tr('push_denied'));
+        // No answer in a blink means no prompt was shown: Chrome hides it for a while after it has been
+        // dismissed a few times. Say where to allow it, instead of "tap again" forever.
+        if (perm !== 'granted') throw new Error(asked < 350 ? tr('push_suppressed') : tr('push_dismissed'));
+        const limit = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+        try {
+            const reg = await limit(navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' }), 15000);
+            if (!reg.active) {                          // first visit: wait for this worker (not "ready", which can wait forever)
+                const sw = reg.installing || reg.waiting;
+                await limit(new Promise((res) => {
+                    if (!sw) return res();
+                    sw.addEventListener('statechange', () => { if (sw.state === 'activated') res(); });
+                }), 15000);
+            }
+            const existing = await renewIfStale(reg, await reg.pushManager.getSubscription());
+            if (existing) return existing;
+            return await limit(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(meta('vapid-key')) }), 20000);
+        } catch (err) {
+            // Never show the browser's own English error text; say what to do instead.
+            console.warn('push subscribe', err);
+            throw new Error(Notification.permission === 'denied' ? tr('push_denied') : tr('push_failed'));
+        }
     }
     /* A subscription made with an older key pair (fresh install, restored data folder) can never be delivered to:
        subscribe again with the current key and tell the server, which moves follows and saved searches across. */
