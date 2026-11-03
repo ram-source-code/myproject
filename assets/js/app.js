@@ -932,13 +932,20 @@
                     if (c && Date.now() - c.t < 10 * 60 * 1000) return resolve(c);
                 } catch { /* ignore */ }
             }
+            const asked = performance.now();
             navigator.geolocation.getCurrentPosition((pos) => {
                 const raw = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
                 const loc = precise ? { ...raw, t: Date.now() } : { lat: round3(raw.lat), lng: round3(raw.lng), acc: raw.acc, t: Date.now() };
                 if (!precise) { try { sessionStorage.setItem(LOC_KEY, JSON.stringify(loc)); } catch { /* ignore */ } }
                 resolve(loc);
             }, (err) => {
-                reject(new Error(err.code === 1 ? tr('loc_denied') : err.code === 3 ? tr('loc_timeout') : tr('loc_unavailable')));
+                // Refused in a blink = no prompt was shown: location is off for the browser at phone level
+                // (iPhone: Safari Websites = Never; Android: Chrome has no location permission) or the browser
+                // stopped asking. Say exactly where to switch it on, for this kind of phone.
+                const help = ' ' + tr(isIOS ? 'loc_help_ios' : 'loc_help_android');
+                if (err.code === 1) reject(new Error((performance.now() - asked < 350 ? tr('loc_blocked') : tr('loc_denied')) + help));
+                else if (err.code === 2) reject(new Error(tr('loc_off') + help));
+                else reject(new Error(tr('loc_timeout')));
             }, { enableHighAccuracy: precise, timeout: precise ? 20000 : 12000, maximumAge: precise ? 0 : 5 * 60 * 1000 });
         });
     }
@@ -1005,7 +1012,7 @@
         if (!window.isSecureContext || !('geolocation' in navigator)) showFallback();
         else navigator.permissions?.query({ name: 'geolocation' }).then((st) => {
             if (st.state === 'granted') load();                     // already allowed: no prompt, just show results
-            else if (st.state === 'denied') showFallback();
+            else if (st.state === 'denied') showFallback(tr('loc_blocked') + ' ' + tr(isIOS ? 'loc_help_ios' : 'loc_help_android') + ' ' + tr('pick_city'));
         }).catch(() => {});
     }
     let recoLoaded = false;
