@@ -75,6 +75,7 @@ $useMap = $useMap ?? false;
         <script src="<?= e(asset('vendor/markercluster/leaflet.markercluster.js')) ?>" defer></script>
         <meta name="map-tiles" content="<?= e(config('tile_url')) ?>" data-attribution="<?= e(config('tile_attribution')) ?>">
     <?php endif; ?>
+    <?php if (!empty($useQr)): ?><script src="<?= e(asset('vendor/qrcode/qrcode.js')) ?>" defer></script><?php endif; ?>
     <script src="<?= e(asset('js/boot.js')) ?>"></script>
     <script src="<?= e(asset('js/app.js')) ?>" defer></script>
     <?php /* Hold the first paint (and the view transition) until <main> is parsed: no flash of a half page. */ ?>
@@ -94,7 +95,7 @@ $useMap = $useMap ?? false;
 <?= render_partial('partials/icons') ?>
 <script type="application/json" id="i18n"><?= json_encode([
     'show' => t('show'), 'hide' => t('hide'), 'link_copied' => t('link_copied'), 'copied' => t('copied'),
-    'files_selected' => t('files_selected'), 'file_too_big' => t('file_too_big'), 'too_many_files' => t('too_many_files'), 'remove_photo' => t('remove_photo'), 'img_heic_client' => t('img_heic_client'),
+    'files_selected' => t('files_selected'), 'file_too_big' => t('file_too_big'), 'too_many_files' => t('too_many_files'), 'remove_photo' => t('remove_photo'), 'preparing_photos' => t('preparing_photos'), 'uploading_pct' => t('uploading_pct'), 'upload_failed' => t('upload_failed'), 'saving' => t('saving'), 'img_heic_client' => t('img_heic_client'),
     'v_password_match' => t('v_password_match'),
     'follow' => t('follow'), 'following' => t('following'), 'push_denied' => t('push_denied'),
     'push_unsupported' => t('push_unsupported'), 'push_ios' => t('push_ios'), 'followed_toast' => t('followed_toast'),

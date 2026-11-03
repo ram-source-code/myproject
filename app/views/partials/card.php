@@ -15,6 +15,7 @@ $headingTag = $headingTag ?? 'h3';
         <?php endif; ?>
         <div class="card-badges">
             <span class="badge badge-<?= e($p['purpose']) ?>"><?= e(t('purpose_' . $p['purpose'])) ?></span>
+            <?php if ($drop = price_drop($p)): ?><span class="badge badge-drop"><svg aria-hidden="true"><use href="#i-trend-down"></use></svg><?= e(t('price_dropped')) ?> <?= (int) $drop['pct'] ?>%</span><?php endif; ?>
             <?php if ($p['is_featured']): ?><span class="badge badge-featured"><svg aria-hidden="true"><use href="#i-star"></use></svg><?= e(t('featured')) ?></span><?php endif; ?>
             <?php if ($p['status'] === 'sold'): ?><span class="badge badge-sold"><?= e(t($p['purpose'] === 'rent' ? 'status_rented' : 'status_sold')) ?></span><?php endif; ?>
         </div>
@@ -24,7 +25,7 @@ $headingTag = $headingTag ?? 'h3';
         <<?= $headingTag ?> class="card-title"><a href="<?= e($href) ?>" class="stretched-link"><?= e($p['title']) ?></a></<?= $headingTag ?>>
         <p class="card-location">
             <svg aria-hidden="true"><use href="#i-pin"></use></svg>
-            <?= e(implode('، ', array_filter([$p['district'], city_name($p)]))) ?>
+            <?= e(implode('، ', array_filter([district_label($p), city_name($p)]))) ?>
             <?php if (isset($p['distance_km'])): ?><span class="card-distance"><svg aria-hidden="true"><use href="#i-locate"></use></svg><?= e(format_distance((float) $p['distance_km'])) ?></span><?php endif; ?>
         </p>
         <?php if (!empty($p['project'])): ?><p class="card-project"><?= e($p['project']) ?></p><?php endif; ?>

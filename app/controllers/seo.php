@@ -42,7 +42,7 @@ function property_seo(array $p): array
             '@type'          => $p['type'] === 'apartment' ? 'Apartment' : ($p['type'] === 'land' ? 'Landform' : 'House'),
             'floorSize'      => ['@type' => 'QuantitativeValue', 'value' => (float) $p['area'], 'unitCode' => 'MTK'],
             'numberOfRooms'  => (int) $p['bedrooms'] ?: null,
-            'address'        => ['@type' => 'PostalAddress', 'addressLocality' => $p['city_en'] ?? '', 'streetAddress' => $p['district'], 'addressRegion' => 'Kurdistan Region', 'addressCountry' => 'IQ'],
+            'address'        => ['@type' => 'PostalAddress', 'addressLocality' => $p['city_en'] ?? '', 'streetAddress' => $p['district_en'] ?: $p['district'], 'addressRegion' => 'Kurdistan Region', 'addressCountry' => 'IQ'],
             'geo'            => $p['lat'] !== null ? ['@type' => 'GeoCoordinates', 'latitude' => (float) $p['lat'], 'longitude' => (float) $p['lng']] : null,
         ]),
     ];

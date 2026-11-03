@@ -3,7 +3,7 @@
 $user = current_user();
 $isFav = in_array((int) $p['id'], favorite_ids(), true);
 $canManage = can_manage_property($p, $user);
-$location = implode('، ', array_filter([$p['address'], $p['district'], city_name($p)]));
+$location = implode('، ', array_filter([$p['address'], district_label($p), city_name($p)]));
 $contactPhone = ($office['phone'] ?? '') ?: (string) ($p['owner_phone'] ?? '');
 $contactWa = ($office['whatsapp'] ?? '') ?: $contactPhone;
 $waText = t('wa_message', ['title' => $p['title'], 'id' => $p['id']]) . ' ' . absolute_base_url() . '/property/' . (int) $p['id'];
@@ -85,7 +85,7 @@ $isLive = $p['status'] === 'published';
             <p class="card-location"><svg aria-hidden="true"><use href="#i-pin"></use></svg><?= e($location) ?><?php if ($p['project']): ?> · <strong><?= e($p['project']) ?></strong><?php endif; ?></p>
         </div>
         <div class="property-head-side">
-            <p class="property-price"><?= e(price_label($p)) ?></p>
+            <p class="property-price"><?= e(price_label($p)) ?><?php if ($drop = price_drop($p)): ?> <span class="price-was"><span class="visually-hidden"><?= e(t('price_was')) ?></span><s><?= e($drop['was']) ?></s> <span class="badge badge-drop"><?= e(t('price_dropped')) ?> <?= (int) $drop['pct'] ?>%</span></span><?php endif; ?></p>
             <?php if ($p['currency'] === 'IQD'): ?>
                 <p class="muted small">≈ <?= e(money((int) $p['price_usd'])) ?></p>
             <?php elseif ($p['purpose'] === 'sale' && $p['area'] > 0): ?>
@@ -194,10 +194,10 @@ $isLive = $p['status'] === 'published';
 
                 <?php if ($isLive && $contactPhone): ?>
                     <div class="contact-buttons">
-                        <a class="btn btn-whatsapp" href="<?= e(whatsapp_url($contactWa, $waText)) ?>" target="_blank" rel="noopener noreferrer">
+                        <a class="btn btn-whatsapp" href="<?= e(whatsapp_url($contactWa, $waText)) ?>" target="_blank" rel="noopener noreferrer" data-track-contact="wa" data-track-url="<?= e(url('property/' . $p['id'] . '/contact')) ?>">
                             <svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('whatsapp')) ?>
                         </a>
-                        <a class="btn btn-primary" href="tel:+<?= e(phone_intl($contactPhone)) ?>">
+                        <a class="btn btn-primary" href="tel:+<?= e(phone_intl($contactPhone)) ?>" data-track-contact="calls" data-track-url="<?= e(url('property/' . $p['id'] . '/contact')) ?>">
                             <svg aria-hidden="true"><use href="#i-phone"></use></svg><span dir="ltr"><?= e($contactPhone) ?></span>
                         </a>
                     </div>
@@ -286,7 +286,7 @@ $isLive = $p['status'] === 'published';
 <?php if ($isLive && $contactPhone && !$canManage): ?>
 <div class="sticky-contact" aria-label="<?= e(t('contact_advertiser')) ?>" role="region">
     <p class="sticky-price"><?= e(price_label($p)) ?></p>
-    <a class="btn btn-whatsapp" href="<?= e(whatsapp_url($contactWa, $waText)) ?>" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('whatsapp')) ?></a>
-    <a class="btn btn-primary" href="tel:+<?= e(phone_intl($contactPhone)) ?>" aria-label="<?= e(t('call')) ?>"><svg aria-hidden="true"><use href="#i-phone"></use></svg><?= e(t('call')) ?></a>
+    <a class="btn btn-whatsapp" href="<?= e(whatsapp_url($contactWa, $waText)) ?>" target="_blank" rel="noopener noreferrer" data-track-contact="wa" data-track-url="<?= e(url('property/' . $p['id'] . '/contact')) ?>"><svg aria-hidden="true"><use href="#i-whatsapp"></use></svg><?= e(t('whatsapp')) ?></a>
+    <a class="btn btn-primary" href="tel:+<?= e(phone_intl($contactPhone)) ?>" data-track-contact="calls" data-track-url="<?= e(url('property/' . $p['id'] . '/contact')) ?>" aria-label="<?= e(t('call')) ?>"><svg aria-hidden="true"><use href="#i-phone"></use></svg><?= e(t('call')) ?></a>
 </div>
 <?php endif; ?>

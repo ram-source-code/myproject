@@ -157,8 +157,39 @@ rooms, area, office logo) so links look good in WhatsApp, Telegram and Facebook.
 For a sub-folder install, add `Sitemap: https://example.com/aqarat/sitemap.xml` to the robots.txt at your
 domain root (crawlers only read robots.txt there). Set `AQARAT_APP_URL` so shared links use your real domain.
 
+## For offices: stats, fresh listings, price drops
+- **Stats.** *My listings* shows the last 30 days: views, WhatsApp taps, calls and enquiries, plus contacts per
+  listing. Each visitor counts once per listing; the office's own taps never count. Stored as one small row per
+  listing per day (`property_stats`).
+- **Still available?** A listing not edited or confirmed for 45 days is flagged: the office gets a push
+  notification and a panel with one-tap **Still available** / **Sold** (and **All still available**). Without an
+  answer within 7 more days it is hidden (status *expired*, never deleted); one tap brings it back. Editing a
+  listing counts as confirming it.
+- **Price drops.** Lowering a price shows a *Price dropped N%* badge and the old price for 30 days, and sends one
+  push to people who saved the listing or whose saved search matches (not again for small cuts within 3 days).
+
+## Neighbourhoods
+*Admin → Cities → Neighbourhoods* holds each city's neighbourhoods in Kurdish, Arabic and English. The
+*Suggestions* list shows what offices typed most often, with one-tap **Add**; adding a neighbourhood links the
+existing listings with that name. In the listing form the city's neighbourhoods are suggested, and a typed name in
+any language or letter case is matched to the same neighbourhood (anything else is kept as typed). Buyers get a
+neighbourhood filter once they pick a city, and saved-search alerts respect it.
+
+## Admin: payments, backups, two-step login
+- **Payments.** When activating or extending an office you can enter the amount (IQD or USD). *Admin → Offices*
+  shows this month's totals and recent payments.
+- **Daily backups.** Once a day a consistent copy of the database is written to `data/backups/` (after the
+  visitor's page is sent) and the newest 7 are kept. Download them from the admin overview. `data/` is never
+  reachable over the web.
+- **Two-step login.** *Profile → Two-step login* — scan the QR code with any authenticator app (Google/Microsoft
+  Authenticator, 2FAS; works offline), confirm a code, keep the 8 recovery codes. Strongly recommended for the
+  admin. Lost the phone *and* the codes? On the server: `php bin/reset-2fa.php you@example.com`.
+
 ## Images (`app/image.php`)
-MIME sniffed with `finfo` + `getimagesize`, dimension and pixel limits checked before decoding, EXIF
+**In the browser first:** before upload, photos larger than 2400 px are redrawn as JPEG and compressed step by
+step until the whole form fits this server's real limits (`upload_max_filesize`, `post_max_size` — even the 2 MB / 8 MB
+PHP defaults), with a progress bar; this also removes GPS data. iPhone HEIC photos are converted to JPEG by Safari;
+a HEIC file that still arrives gets a clear message. Then on the server: MIME sniffed with `finfo` + `getimagesize`, dimension and pixel limits checked before decoding, EXIF
 orientation fixed, resized (1600×1200 max + 640×427 thumbnail; logos 256×256), **re-encoded to WebP**
 (strips metadata/GPS and any embedded payload), watermarked with the office logo (`AQARAT_WATERMARK=0` to
 disable), saved under random names.
@@ -177,6 +208,8 @@ See `app/config.php`.
 - `php tests/push_test.php` — Web Push crypto: encrypt/decrypt round-trip, VAPID signature, SSRF guard.
 - `tests/e2e.py` — functional + security checks (subfolder routing, languages, offices, follow/push,
   IDOR, CSRF, XSS, uploads, moderation, throttling). Setup instructions at the top of the file.
+- `tests/features_test.py` — office stats, the 45/7-day check, price drops, payments, backups, two-step login
+  (RFC 6238, replay, recovery codes), neighbourhoods and upload limits. Needs `APP_DIR` (see the top of the file).
 
 ## Layout
 ```

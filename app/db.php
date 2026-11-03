@@ -66,18 +66,26 @@ function migrate(PDO $pdo): void
         return;
     }
 
+    // Foreign keys off while migrating (it can only change outside a transaction): rebuilding a table means
+    // dropping it, and with foreign keys on that would cascade-delete every photo, enquiry and favourite.
+    $pdo->exec('PRAGMA foreign_keys = OFF');
     $pdo->exec('BEGIN IMMEDIATE');
     try {
         // Re-check inside the write lock in case another request migrated first.
         $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
         for ($i = $version; $i < $target; $i++) {
-            $pdo->exec($migrations[$i]);
+            is_callable($migrations[$i]) ? $migrations[$i]($pdo) : $pdo->exec($migrations[$i]);
+        }
+        if ($pdo->query('PRAGMA foreign_key_check')->fetch()) {
+            throw new RuntimeException('Migration left broken foreign keys');
         }
         $pdo->exec('PRAGMA user_version = ' . $target);
         $pdo->exec('COMMIT');
     } catch (Throwable $e) {
         $pdo->exec('ROLLBACK');
         throw $e;
+    } finally {
+        $pdo->exec('PRAGMA foreign_keys = ON');
     }
 }
 
@@ -401,5 +409,91 @@ function migrations(): array
         DROP INDEX IF EXISTS idx_properties_user;
         ANALYZE;
         SQL,
+        // v8 — stale-listing check ('expired'), price drops, office stats, payments, neighbourhoods, two-step login
+        static function (PDO $pdo): void {
+            rebuild_table($pdo, 'properties', static fn(string $sql): string => str_replace(
+                "CHECK (status IN ('pending','published','rejected','sold'))",
+                "CHECK (status IN ('pending','published','rejected','sold','expired'))", $sql));
+            $pdo->exec(<<<'SQL'
+            CREATE TABLE districts (
+                id      INTEGER PRIMARY KEY,
+                city_id INTEGER NOT NULL REFERENCES cities(id) ON DELETE CASCADE,
+                name_ku TEXT NOT NULL,
+                name_ar TEXT NOT NULL,
+                name_en TEXT NOT NULL,
+                UNIQUE (city_id, name_en)
+            );
+            ALTER TABLE properties ADD COLUMN confirmed_at     TEXT;
+            ALTER TABLE properties ADD COLUMN stale_since      TEXT;
+            ALTER TABLE properties ADD COLUMN prev_price_usd   INTEGER;
+            ALTER TABLE properties ADD COLUMN price_dropped_at TEXT;
+            ALTER TABLE properties ADD COLUMN district_id      INTEGER REFERENCES districts(id) ON DELETE SET NULL;
+            UPDATE properties SET confirmed_at = COALESCE(updated_at, created_at);
+            CREATE INDEX idx_properties_stale    ON properties(status, confirmed_at);
+            CREATE INDEX idx_properties_district ON properties(district_id) WHERE district_id IS NOT NULL;
+
+            CREATE TABLE property_stats (
+                property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+                day         TEXT    NOT NULL,
+                views       INTEGER NOT NULL DEFAULT 0,
+                wa          INTEGER NOT NULL DEFAULT 0,
+                calls       INTEGER NOT NULL DEFAULT 0,
+                inquiries   INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (property_id, day)
+            ) WITHOUT ROWID;
+
+            CREATE TABLE payments (
+                id          INTEGER PRIMARY KEY,
+                office_id   INTEGER REFERENCES offices(id) ON DELETE SET NULL,
+                office_name TEXT    NOT NULL,
+                amount      INTEGER NOT NULL CHECK (amount > 0),
+                currency    TEXT    NOT NULL CHECK (currency IN ('IQD','USD')),
+                months      INTEGER,
+                created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX idx_payments_created ON payments(created_at);
+            CREATE INDEX idx_payments_office  ON payments(office_id);
+
+            ALTER TABLE users ADD COLUMN totp_secret    TEXT;
+            ALTER TABLE users ADD COLUMN totp_last_step INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE users ADD COLUMN recovery_codes TEXT    NOT NULL DEFAULT '[]';
+            SQL);
+        },
     ];
+}
+
+/**
+ * Change a table's definition the way SQLite documents (create new, copy, swap), keeping its rows, ids, indexes
+ * and triggers. Runs inside migrate(), which has foreign keys switched off and checks them before committing.
+ */
+function rebuild_table(PDO $pdo, string $table, callable $editSql): void
+{
+    $get = $pdo->prepare("SELECT type, name, sql FROM sqlite_master WHERE tbl_name = ? AND sql IS NOT NULL");
+    $get->execute([$table]);
+    $objects = $get->fetchAll();
+    $create = null;
+    $extras = [];
+    foreach ($objects as $o) {
+        if ($o['type'] === 'table') {
+            $create = $o['sql'];
+        } else {
+            $extras[] = $o['sql'];      // indexes and triggers, recreated after the swap
+        }
+    }
+    if ($create === null) {
+        throw new RuntimeException("rebuild_table: no table $table");
+    }
+    $new = $editSql($create);
+    if ($new === $create) {
+        throw new RuntimeException("rebuild_table: the edit did not change $table");
+    }
+    $tmp = $table . '_rebuild';
+    $pdo->exec((string) preg_replace('/^CREATE TABLE\s+"?' . preg_quote($table, '/') . '"?/i', 'CREATE TABLE ' . $tmp, $new, 1));
+    $pdo->exec("INSERT INTO $tmp SELECT * FROM $table");
+    $pdo->exec("DROP TABLE $table");
+    $pdo->exec("ALTER TABLE $tmp RENAME TO $table");
+    foreach ($extras as $sql) {
+        $pdo->exec($sql);
+    }
 }

@@ -126,6 +126,7 @@ function property_inquiry(int $id): void
     }
     db()->prepare('INSERT INTO inquiries (property_id, user_id, name, email, phone, message, ip) VALUES (?,?,?,?,?,?,?)')
         ->execute([$id, $user['id'] ?? null, $data['name'], $data['email'], $data['phone'], $data['message'], client_ip()]);
+    bump_stat($id, 'inquiries');
     clear_old();
     flash('success', t('inquiry_sent'));
     redirect(property_url($p) . '#contact');
@@ -208,7 +209,26 @@ function count_property_view(array $p, ?array $user): void
         $_SESSION['_viewed'][] = $id;
         $_SESSION['_viewed'] = array_slice($_SESSION['_viewed'], -200);
         db()->prepare('UPDATE properties SET views = views + 1 WHERE id = ?')->execute([$id]);
+        bump_stat($id, 'views');
     }
+}
+
+/** Beacon when a visitor taps WhatsApp or Call on a listing — counted once per visitor, never the owner's own taps. */
+function property_contact_beacon(int $id): void
+{
+    $kind = input('kind');
+    $p = find_property($id);
+    if ($p && $p['status'] === 'published' && in_array($kind, ['wa', 'calls'], true) && !can_manage_property($p, current_user())) {
+        $_SESSION['_contacted'] ??= [];
+        $k = $id . ':' . $kind;
+        if (!in_array($k, $_SESSION['_contacted'], true)) {
+            $_SESSION['_contacted'][] = $k;
+            $_SESSION['_contacted'] = array_slice($_SESSION['_contacted'], -200);
+            bump_stat($id, $kind);
+        }
+    }
+    http_response_code(204);
+    exit;
 }
 
 /** Beacon from a prerendered page once it is actually shown. */

@@ -127,7 +127,9 @@ function current_path(): string
 function url(string $path = '/', array $query = []): string
 {
     $q = array_filter($query, static fn($v) => $v !== null && $v !== '' && $v !== []);
-    if (forced_lang() !== null && !str_starts_with($path, 'lang/') && !isset($q['lang'])) {
+    // Files (fonts, images, uploads) never carry ?lang=: the font preload must match the CSS URL byte for byte,
+    // or the browser downloads the font twice and warns "preloaded but not used".
+    if (forced_lang() !== null && !str_starts_with($path, 'lang/') && !isset($q['lang']) && !preg_match('#^/?(assets|uploads)/#', $path)) {
         $q['lang'] = forced_lang();
     }
     return base_path() . '/' . ltrim($path, '/') . ($q ? '?' . http_build_query($q) : '');
@@ -255,6 +257,14 @@ function redirect(string $to, int $code = 303): never
     // Only allow local redirects to prevent open-redirect abuse.
     if (!str_starts_with($to, '/') || str_starts_with($to, '//') || str_starts_with($to, '/\\') || preg_match('/[\r\n]/', $to)) {
         $to = url('/');
+    }
+    // The upload-with-progress script follows redirects itself: answer with JSON so the one-time flash message
+    // isn't consumed by its background request before the browser shows the page.
+    if (($_SERVER['HTTP_X_AQ_UPLOAD'] ?? '') === '1') {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode(['redirect' => $to]);
+        exit;
     }
     header('Location: ' . $to, true, $code);
     exit;
@@ -524,7 +534,7 @@ const DEED_TYPES = ['tapo', 'agricultural', 'investment', 'other'];
 const PROPERTY_PURPOSES = ['sale', 'rent'];
 const RENT_PERIODS = ['monthly', 'yearly', 'daily'];
 const PROPERTY_FEATURES = ['parking', 'elevator', 'generator', 'solar', 'water_tank', 'garden', 'balcony', 'pool', 'ac', 'kitchen', 'security', 'gym', 'basement', 'roof', 'mountain_view', 'gated'];
-const PROPERTY_STATUSES = ['pending', 'published', 'rejected', 'sold'];
+const PROPERTY_STATUSES = ['pending', 'published', 'rejected', 'sold', 'expired'];
 
 function cities(): array
 {
@@ -646,6 +656,21 @@ function run_maintenance(): void
         return;
     }
     @touch($stamp);
+    // Do the work after this visitor's page is sent (backups can take a moment on a big database).
+    register_shutdown_function('maintenance_work');
+}
+
+const STALE_AFTER_DAYS = 45;     // ask the office "still available?" after this long without an edit or confirm
+const STALE_GRACE_DAYS = 7;      // ... and hide the listing if they don't answer within this many days
+const BACKUPS_KEPT = 7;
+
+function maintenance_work(): void
+{
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();       // PHP-FPM: close the connection now, keep working
+    }
+    ignore_user_abort(true);
+    @set_time_limit(300);
     try {
         $pdo = db();
         $pdo->exec("UPDATE inquiries SET ip = '' WHERE ip != '' AND created_at < datetime('now', '-30 days')");
@@ -656,6 +681,8 @@ function run_maintenance(): void
         $pdo->exec("DELETE FROM push_subscriptions WHERE last_seen_at < datetime('now', '-400 days')");
         $pdo->prepare('DELETE FROM hits WHERE t < ?')->execute([time() - 86400]);
         $pdo->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 86400]);
+        maintenance_stale_listings($pdo);
+        maintenance_backup($pdo);
         // Keep the query planner's statistics fresh (cheap: re-analyses only tables that changed a lot),
         // and fold the WAL back into the database file so it stays small.
         $pdo->exec('PRAGMA analysis_limit = 1000');
@@ -689,4 +716,121 @@ function office_state(?array $u): string
 function can_post_listings(?array $u): bool
 {
     return office_state($u) === 'active';
+}
+
+/** A php.ini size ("8M", "2G", "512K", "1048576") in bytes; 0 means "no limit". */
+function ini_bytes(string $key): int
+{
+    $v = trim((string) ini_get($key));
+    if ($v === '' || $v === '0' || $v === '-1') {
+        return 0;
+    }
+    $n = (float) $v;
+    return (int) match (strtolower(substr($v, -1))) { 'g' => $n * 1073741824, 'm' => $n * 1048576, 'k' => $n * 1024, default => $n };
+}
+
+/** What one uploaded photo / one whole form may weigh on THIS server (the browser shrinks photos to fit). */
+function upload_limits(): array
+{
+    $file = (int) config('max_upload_bytes');
+    if (($ini = ini_bytes('upload_max_filesize')) > 0) {
+        $file = min($file, $ini);
+    }
+    return ['file' => $file, 'post' => ini_bytes('post_max_size')];
+}
+
+/** +1 to today's counter for a listing: views, wa (WhatsApp taps), calls, inquiries. */
+function bump_stat(int $propertyId, string $col): void
+{
+    if (!in_array($col, ['views', 'wa', 'calls', 'inquiries'], true)) {
+        return;
+    }
+    db()->prepare("INSERT INTO property_stats (property_id, day, $col) VALUES (?, date('now'), 1)
+        ON CONFLICT (property_id, day) DO UPDATE SET $col = $col + 1")->execute([$propertyId]);
+}
+
+/** Totals over the last $days days for these listings: [id => [views, wa, calls, inquiries]] plus 'total'. */
+function listing_stats(array $ids, int $days = 30): array
+{
+    $out = ['total' => ['views' => 0, 'wa' => 0, 'calls' => 0, 'inquiries' => 0]];
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    foreach (array_chunk($ids, 500) as $chunk) {
+        $st = db()->prepare('SELECT property_id, SUM(views) views, SUM(wa) wa, SUM(calls) calls, SUM(inquiries) inquiries
+            FROM property_stats WHERE property_id IN (' . implode(',', array_fill(0, count($chunk), '?')) . ") AND day >= date('now', ?)
+            GROUP BY property_id");
+        $st->execute([...$chunk, '-' . ($days - 1) . ' days']);
+        foreach ($st->fetchAll() as $r) {
+            $id = (int) $r['property_id'];
+            unset($r['property_id']);
+            $out[$id] = array_map('intval', $r);
+            foreach ($out[$id] as $k => $v) {
+                $out['total'][$k] += $v;
+            }
+        }
+    }
+    return $out;
+}
+
+/** Flag listings nobody confirmed for 45 days (and remind the office), hide them after 7 more days. */
+function maintenance_stale_listings(PDO $pdo): void
+{
+    $cut = '-' . STALE_AFTER_DAYS . ' days';
+    $find = $pdo->prepare("SELECT user_id FROM properties WHERE status = 'published' AND stale_since IS NULL AND confirmed_at < datetime('now', ?)");
+    $find->execute([$cut]);
+    $owners = array_count_values(array_map('intval', $find->fetchAll(PDO::FETCH_COLUMN)));
+    $pdo->prepare("UPDATE properties SET stale_since = datetime('now') WHERE status = 'published' AND stale_since IS NULL AND confirmed_at < datetime('now', ?)")
+        ->execute([$cut]);
+    $pdo->prepare("UPDATE properties SET status = 'expired' WHERE status = 'published' AND stale_since < datetime('now', ?)")
+        ->execute(['-' . STALE_GRACE_DAYS . ' days']);
+    if ($owners && function_exists('push_to_user')) {
+        $base = absolute_base_url();
+        foreach ($owners as $userId => $n) {
+            push_to_user($userId, [
+                'title' => t('push_check_title'),
+                'body'  => t('push_check_body', ['n' => $n, 'days' => STALE_GRACE_DAYS]),
+                'url'   => $base . '/dashboard',
+                'tag'   => 'stale',
+            ]);
+        }
+    }
+}
+
+/** Daily copy of the database in data/backups (a consistent snapshot even while people use the site); keeps 7. */
+function maintenance_backup(PDO $pdo): void
+{
+    $dir = backups_dir();
+    if (!is_dir($dir) && !@mkdir($dir, 0750, true)) {
+        return;
+    }
+    $file = $dir . '/aqarat-' . date('Y-m-d') . '.sqlite';
+    if (!is_file($file)) {
+        $tmp = $file . '.part';
+        @unlink($tmp);
+        $pdo->exec('VACUUM INTO ' . $pdo->quote($tmp));
+        @chmod($tmp, 0640);
+        @rename($tmp, $file);
+    }
+    $all = glob($dir . '/aqarat-*.sqlite') ?: [];
+    rsort($all);                                   // names sort by date
+    foreach (array_slice($all, BACKUPS_KEPT) as $old) {
+        @unlink($old);
+    }
+}
+
+function backups_dir(): string
+{
+    return dirname((string) config('db_path')) . '/backups';
+}
+
+/** A recent price drop (last 30 days): ['pct' => 12, 'was' => '$250,000'] or null. */
+function price_drop(array $p): ?array
+{
+    $prev = (int) ($p['prev_price_usd'] ?? 0);
+    $now = (int) ($p['price_usd'] ?? 0);
+    if ($prev <= $now || $now <= 0 || empty($p['price_dropped_at']) || strtotime($p['price_dropped_at'] . ' UTC') < time() - 30 * 86400) {
+        return null;
+    }
+    $cur = $p['currency'] ?? 'USD';
+    $was = $cur === 'IQD' ? money(round($prev * max(1, (int) config('iqd_per_usd')), -3), 'IQD') : money($prev, 'USD');
+    return ['pct' => (int) round((1 - $now / $prev) * 100), 'was' => $was];
 }

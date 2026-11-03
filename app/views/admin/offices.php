@@ -20,6 +20,36 @@ $pending = count(array_filter($items, static fn($o) => $o['activated_at'] === nu
         <h1 class="page-title"><?= e(t('offices')) ?></h1>
         <p class="muted"><?= e(t('activation_help')) ?><?php if ($pending): ?> <strong><?= e(t('pending_offices', ['n' => $pending])) ?></strong><?php endif; ?></p>
 
+        <section class="panel payments-panel" aria-labelledby="pay-h">
+            <h2 id="pay-h" class="panel-title"><?= e(t('payments')) ?></h2>
+            <dl class="stat-tiles">
+                <?php foreach (['IQD', 'USD'] as $c): ?>
+                    <div><dt><?= e(t('this_month')) ?> · <?= $c ?></dt><dd dir="ltr"><?= number_format((int) ($payMonth[$c] ?? 0)) ?></dd></div>
+                <?php endforeach; ?>
+                <div><dt><?= e(t('payments_count_month')) ?></dt><dd><?= (int) ($payMonth['n'] ?? 0) ?></dd></div>
+            </dl>
+            <?php if ($payments): ?>
+                <details>
+                    <summary><?= e(t('recent_payments')) ?></summary>
+                    <div class="table-wrap" role="region" aria-label="<?= e(t('recent_payments')) ?>" tabindex="0">
+                        <table class="table">
+                            <thead><tr><th scope="col"><?= e(t('date')) ?></th><th scope="col"><?= e(t('office_name')) ?></th><th scope="col"><?= e(t('amount_paid')) ?></th><th scope="col"><?= e(t('plan_length')) ?></th></tr></thead>
+                            <tbody>
+                            <?php foreach ($payments as $pay): ?>
+                                <tr>
+                                    <td data-label="<?= e(t('date')) ?>" dir="ltr"><?= e(substr($pay['created_at'], 0, 10)) ?></td>
+                                    <td data-label="<?= e(t('office_name')) ?>"><?= e($pay['office_name']) ?></td>
+                                    <td data-label="<?= e(t('amount_paid')) ?>" dir="ltr"><?= number_format((int) $pay['amount']) ?> <?= e($pay['currency']) ?></td>
+                                    <td data-label="<?= e(t('plan_length')) ?>"><?= e($pay['months'] === null ? t('no_end_date') : ((int) $pay['months'] === 1 ? t('month_1') : t('months_n', ['n' => (int) $pay['months']]))) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            <?php endif; ?>
+        </section>
+
         <?php if ($done): ?>
             <section class="panel code-panel" aria-labelledby="done-h" tabindex="-1" data-autofocus>
                 <h2 id="done-h" class="panel-title"><svg class="inline-icon" aria-hidden="true"><use href="#i-check"></use></svg> <?= e(t('office_activated_now', ['office' => $done['office']])) ?></h2>
@@ -57,6 +87,10 @@ $pending = count(array_filter($items, static fn($o) => $o['activated_at'] === nu
                                     <?php foreach (ACTIVATION_MONTHS as $m): ?><option value="<?= $m ?>"<?= $m === 1 ? ' selected' : '' ?>><?= e($m === 1 ? t('month_1') : t('months_n', ['n' => $m])) ?></option><?php endforeach; ?>
                                     <option value="0"><?= e(t('no_end_date')) ?></option>
                                 </select>
+                                <label class="visually-hidden" for="amt-<?= (int) $o['id'] ?>"><?= e(t('amount_paid')) ?>: <?= e($o['name']) ?></label>
+                                <input id="amt-<?= (int) $o['id'] ?>" class="amount-input" name="amount" type="number" inputmode="numeric" min="0" step="1" placeholder="<?= e(t('amount_paid_optional')) ?>" dir="ltr">
+                                <label class="visually-hidden" for="cur-<?= (int) $o['id'] ?>"><?= e(t('currency')) ?>: <?= e($o['name']) ?></label>
+                                <select id="cur-<?= (int) $o['id'] ?>" name="currency"><option value="IQD">IQD</option><option value="USD">USD</option></select>
                                 <button class="btn btn-primary btn-sm" type="submit"><svg aria-hidden="true"><use href="#i-check"></use></svg><?= e(in_array($st, ['pending', 'expired'], true) ? t('activate') : t('extend')) ?><span class="visually-hidden">: <?= e($o['name']) ?></span></button>
                             </form>
                             <?php if (in_array($st, ['soon', 'expired'], true) && ($ph = office_contact_phone($o))): ?>

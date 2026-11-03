@@ -55,10 +55,68 @@ function login_submit(): void
     db()->prepare('DELETE FROM login_attempts WHERE email = ?')->execute([$email]);
 
     $intended = $_SESSION['_intended'] ?? url('dashboard');
-    login_user((int) $u['id']);
     clear_old();
+    if (user_2fa((int) $u['id'])) {
+        // Password was right; the account is not signed in until the authenticator code is too.
+        session_regenerate_id(true);
+        $_SESSION['_2fa'] = ['uid' => (int) $u['id'], 't' => time(), 'tries' => 0, 'next' => $intended];
+        redirect(url('login/code'));
+    }
+    login_user((int) $u['id']);
     flash('success', t('welcome_back'));
     redirect(is_string($intended) ? $intended : url('dashboard'));
+}
+
+/** Step 2 of signing in, for accounts with two-step login on. */
+function login_code_form(): void
+{
+    $p = $_SESSION['_2fa'] ?? null;
+    if (!$p || $p['t'] < time() - 300) {
+        unset($_SESSION['_2fa']);
+        redirect(url('login'));
+    }
+    render('auth/login_code', ['pageTitle' => t('twofa_title') . ' — ' . app_name()]);
+}
+
+function login_code_submit(): void
+{
+    $p = $_SESSION['_2fa'] ?? null;
+    if (!$p || $p['t'] < time() - 300 || $p['tries'] >= 5) {     // 5 minutes, 5 tries, then start again
+        unset($_SESSION['_2fa']);
+        flash('error', t('twofa_expired'));
+        redirect(url('login'));
+    }
+    $uid = (int) $p['uid'];
+    if (login_throttled('uid:' . $uid)) {                // wrong codes count per account too, across sessions and IPs
+        unset($_SESSION['_2fa']);
+        flash('error', t('login_throttled', ['min' => (int) (config('login_window_sec') / 60)]));
+        redirect(url('login'));
+    }
+    $f = user_2fa($uid);
+    if (!$f) {
+        unset($_SESSION['_2fa']);
+        redirect(url('login'));
+    }
+    $code = trim((string) ($_POST['code'] ?? ''));
+    $ok = false;
+    if (($step = totp_verify($f['totp_secret'], $code, (int) $f['totp_last_step'])) !== null) {
+        db()->prepare('UPDATE users SET totp_last_step = ? WHERE id = ?')->execute([$step, $uid]);   // never accept it again
+        $ok = true;
+    } elseif (($left = use_recovery_code((array) json_decode($f['recovery_codes'], true), $code)) !== null) {
+        db()->prepare('UPDATE users SET recovery_codes = ? WHERE id = ?')->execute([json_encode($left), $uid]);
+        flash('info', t('twofa_recovery_used', ['n' => count($left)]));
+        $ok = true;
+    }
+    if (!$ok) {
+        $_SESSION['_2fa']['tries']++;
+        db()->prepare('INSERT INTO login_attempts (ip, email, attempted_at) VALUES (?,?,?)')->execute([client_ip(), 'uid:' . $uid, time()]);
+        with_old([], ['code' => t('twofa_wrong')]);
+        redirect(url('login/code'));
+    }
+    unset($_SESSION['_2fa']);
+    login_user($uid);
+    flash('success', t('welcome_back'));
+    redirect(is_string($p['next']) ? $p['next'] : url('dashboard'));
 }
 
 function register_form(): void

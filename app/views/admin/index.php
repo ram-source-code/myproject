@@ -65,6 +65,25 @@
                     <?= csrf_field() ?>
                     <button class="btn btn-primary" type="submit"><svg aria-hidden="true"><use href="#i-download"></use></svg><?= e(t('download_backup')) ?></button>
                 </form>
+                <h3 class="small-heading"><?= e(t('auto_backups')) ?></h3>
+                <?php $backups = glob(backups_dir() . '/aqarat-*.sqlite') ?: []; rsort($backups); ?>
+                <?php if ($backups): ?>
+                    <ul class="backup-list">
+                        <?php foreach ($backups as $b): ?>
+                            <li>
+                                <span dir="ltr"><?= e(substr(basename($b), 7, 10)) ?></span>
+                                <span class="muted small" dir="ltr"><?= e(number_format(filesize($b) / 1048576, 1)) ?> MB</span>
+                                <form method="post" action="<?= e(url('admin/backups/download')) ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="file" value="<?= e(basename($b)) ?>">
+                                    <button class="btn btn-ghost btn-sm" type="submit"><svg aria-hidden="true"><use href="#i-download"></use></svg><?= e(t('download')) ?><span class="visually-hidden"> <?= e(substr(basename($b), 7, 10)) ?></span></button>
+                                </form>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php else: ?>
+                    <p class="muted small"><?= e(t('auto_backups_none')) ?></p>
+                <?php endif; ?>
             </section>
             <section class="panel" aria-labelledby="log-h">
                 <h2 id="log-h" class="panel-title"><?= e(t('audit_log')) ?></h2>

@@ -34,7 +34,7 @@ $errs = errors();
             </div>
         <?php endif; ?>
 
-        <form method="post" action="<?= e($action) ?>" enctype="multipart/form-data" class="listing-form" novalidate data-validate>
+        <form method="post" action="<?= e($action) ?>" enctype="multipart/form-data" class="listing-form" novalidate data-validate data-upload-form<?php $lim = upload_limits(); ?> data-file-limit="<?= (int) $lim['file'] ?>" data-post-limit="<?= (int) $lim['post'] ?>">
             <?= csrf_field() ?>
 
             <section class="panel" aria-labelledby="sec-basic">
@@ -108,7 +108,10 @@ $errs = errors();
                     </div>
                     <div class="field">
                         <label for="f-district"><?= e(t('field_district')) ?></label>
-                        <input id="f-district" name="district" maxlength="100" value="<?= e($v('district')) ?>" placeholder="<?= e(t('district_ph')) ?>">
+                        <input id="f-district" name="district" maxlength="100" value="<?= e($v('district')) ?>" placeholder="<?= e(t('district_ph')) ?>"
+                               list="district-list" autocomplete="off" data-district-input data-districts="<?= e(districts_json()) ?>" data-city-select="f-city_id">
+                        <datalist id="district-list"></datalist>
+                        <p class="hint"><?= e(t('district_hint')) ?></p>
                     </div>
                 </div>
                 <div class="field">
@@ -257,6 +260,10 @@ $errs = errors();
                 <?php endif; ?>
             </section>
 
+            <div class="upload-progress" data-upload-progress hidden>
+                <progress max="100" value="0"></progress>
+                <p class="hint" role="status" aria-live="polite" data-upload-text></p>
+            </div>
             <div class="form-footer">
                 <button class="btn btn-primary btn-lg" type="submit"><?= e($isEdit ? t('save_changes') : t('publish_listing')) ?></button>
                 <a class="btn btn-ghost" href="<?= e(url('dashboard')) ?>"><?= e(t('cancel')) ?></a>

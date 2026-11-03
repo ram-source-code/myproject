@@ -97,6 +97,16 @@ $isOn = static fn(string $k, $v) => ($query[$k] ?? null) === $v;
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php $cityDistricts = $f['city'] ? (districts_by_city()[$f['city']] ?? []) : []; ?>
+            <div class="field" data-district-field<?= $cityDistricts ? '' : ' hidden' ?>>
+                <label for="f-district"><?= e(t('field_district')) ?></label>
+                <select id="f-district" name="district" data-districts="<?= e(districts_json()) ?>" data-city-select="f-city">
+                    <option value=""><?= e(t('all_districts')) ?></option>
+                    <?php foreach ($cityDistricts as $d): ?>
+                        <option value="<?= (int) $d['id'] ?>" <?= $f['district'] === (int) $d['id'] ? 'selected' : '' ?>><?= e(district_name($d)) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="field">
                 <label for="f-type"><?= e(t('type')) ?></label>
                 <select id="f-type" name="type">
