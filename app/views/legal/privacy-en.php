@@ -1,21 +1,21 @@
-<p class="legal-review">[CLIENT/LAWYER: review] — draft written for how this website actually works. Replace the bracketed items and have it checked before launch.</p>
 <p class="muted">Last updated: <?= e($updated) ?></p>
 
 <h2>Who runs this website</h2>
-<p><?= e(app_name()) ?> is operated by [CLIENT: legal name of the operator], [CLIENT: address, city, Kurdistan Region of Iraq]. Contact: <a href="mailto:<?= e($email) ?>" dir="ltr"><?= e($email) ?></a>.</p>
+<p><?= e(app_name()) ?> is run by its administrator in the Kurdistan Region of Iraq. Contact: <a href="mailto:<?= e($email) ?>" dir="ltr"><?= e($email) ?></a>.</p>
 
 <h2>What we collect and why</h2>
 <ul>
-    <li><strong>Account details</strong> (name, email, phone, password hash) — to let you sign in, publish listings and be contacted about them. Your phone number is shown on your listings.</li>
+    <li><strong>Account details</strong> (name, email, phone, password hash and, if you turn on two-step login, its secret key) — to let you sign in, publish listings and be contacted about them. Your phone number is shown on your listings.</li>
     <li><strong>Listings, photos and videos</strong> you upload — to publish them. Photos are re-encoded: location (GPS) and camera data are removed.</li>
     <li><strong>Enquiries</strong> (name, email, optional phone, message) — sent to the advertiser so they can reply to you.</li>
     <li><strong>Notifications</strong> — if you follow an office or save a search alert, your browser gives us a push address and keys. We store which offices you follow and the filters of your alerts. No account is needed.</li>
     <li><strong>Your location</strong> — only when you press “Near me”. It is rounded to about 100 m, used for that search, and not stored — except inside a search alert you choose to save.</li>
+    <li><strong>Visit counts</strong> — for each listing we count views and taps on WhatsApp and Call per day, as numbers only, so the office can see how its listing is doing. We do not record who viewed or tapped.</li>
     <li><strong>Reports</strong> about listings, and <strong>technical data</strong> (IP address) used only to limit abuse.</li>
 </ul>
 
 <h2>Where it is stored and for how long</h2>
-<p>Data is stored on our hosting server in [CLIENT: hosting country]. IP addresses on enquiries and reports are erased after 30 days. Enquiries are deleted after 24 months, notification history after 12 months, inactive push subscriptions after 400 days, the admin activity log after 24 months. Listings stay until you or an administrator delete them. Deleting your account removes your listings, photos, videos, office and saved items.</p>
+<p>Data is stored on our hosting server. IP addresses on enquiries and reports are erased after 30 days. Enquiries are deleted after 24 months, notification history after 12 months, inactive push subscriptions after 400 days, the admin activity log after 24 months. Listings stay until you or an administrator delete them. Deleting your account removes your listings, photos, videos, office and saved items. A copy of the database is kept as a backup each day and deleted after 7 days, so deleted information can remain in a backup for up to 7 days.</p>
 
 <h2>Who else receives data</h2>
 <ul>

@@ -98,7 +98,7 @@ function sitemap_xml(): void
     ob_start();
     $o = absolute_origin();
     $urls = [[$o . url('/'), null], [$o . url('properties'), null], [$o . url('offices'), null],
-             [$o . url('privacy'), '2026-11-02'], [$o . url('terms'), '2026-11-02']];
+             [$o . url('privacy'), '2026-11-03'], [$o . url('terms'), '2026-11-02']];
     foreach (db()->query("SELECT DISTINCT c.slug FROM cities c JOIN properties p ON p.city_id = c.id AND p.status = 'published'") as $c) {
         $urls[] = [$o . url('city/' . $c['slug']), null];
     }
@@ -237,7 +237,7 @@ function legal_page(string $doc): void
         'pageTitle' => t($doc === 'privacy' ? 'privacy_policy' : 'terms') . ' — ' . app_name(),
         'heading'   => t($doc === 'privacy' ? 'privacy_policy' : 'terms'),
         'doc'       => $doc,
-        'updated'   => '2026-11-02',
+        'updated'   => $doc === 'privacy' ? '2026-11-03' : '2026-11-02',
         'email'     => filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : 'admin@example.com',
     ]);
 }
