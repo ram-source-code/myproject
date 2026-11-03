@@ -11,8 +11,8 @@ $useMap = $useMap ?? false;
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#1f5641" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#121614" media="(prefers-color-scheme: dark)">
     <title><?= e($pageTitle ?? app_name()) ?></title>
     <meta name="description" content="<?= e($metaDesc ?? t('meta_description')) ?>">
 <?php
@@ -63,7 +63,7 @@ $useMap = $useMap ?? false;
     <meta name="apple-mobile-web-app-title" content="<?= e(app_name()) ?>">
     <?php /* Preload EXACTLY the URL that @font-face in app.css requests (no ?v= query) — otherwise the browser treats
              them as two files: the preload goes unused (console warning) and the font downloads twice. */ ?>
-    <link rel="preload" href="<?= e(url('assets/fonts/' . (lang() === 'en' ? 'inter-latin-wght.woff2' : 'noto-sans-arabic-wght.woff2'))) ?>" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="<?= e(url('assets/fonts/noto-kufi-arabic-wght.woff2')) ?>" as="font" type="font/woff2" crossorigin>
     <?php $useMap = $useMap && maps_enabled(); ?>
     <?php if ($useMap): ?>
         <link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>">

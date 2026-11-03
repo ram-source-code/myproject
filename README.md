@@ -98,16 +98,23 @@ and on `localhost`).
   shows this hint automatically.
 
 ## Design, motion & performance (2026)
+**Look:** made for this subject, not a template. Type is **Noto Kufi Arabic** (geometric Kufic, the script of the
+region's decorative brickwork) for the interface and headings, and **Noto Naskh Arabic** (the book hand) for
+descriptions and long text; both cover Kurdish, Arabic and English. Colours come from the place: Zagros pine
+`#1f5641`, saffron `#e9a92b` (used only for featured items and the active city), madder red `#b4322a` for price drops
+and errors, on gypsum `#f6f6f3`. The home page opens with the question *"Which city is your next home in?"* and
+the city names set large; listings are photo-first with the price in heavy Kufi; sections are divided by rules
+instead of boxes. Motion only answers what a person does (page changes, the save heart, menus).
 - **Instant navigation:** Speculation Rules prefetch likely next pages on hover/touch and prerender listing,
   office and city pages (prerenders never inflate view counts — the page reports the view only when shown).
 - **Smooth page changes:** cross-document **View Transitions**; the card photo morphs into the listing hero and
   back. Everything respects `prefers-reduced-motion`.
 - **No layout shift:** `font-size-adjust: from-font`, reserved image sizes, `rel=expect` render blocking until
   `<main>` is parsed, and the photo's **dominant colour** (computed at upload) as an instant placeholder.
-- **Less work:** `content-visibility: auto` with intrinsic sizes for off-screen sections, compositor-only
-  scroll-driven reveal animations, brotli/gzip and 1-year immutable caching for hashed assets.
+- **Less work:** `content-visibility: auto` with intrinsic sizes for off-screen sections, brotli/gzip and
+  1-year immutable caching for hashed assets.
 - **Phone-first:** swipeable scroll-snap photo strip, bottom-sheet filters with a live "Show N results" count,
-  app-style bottom navigation, sticky WhatsApp/call bar, spring micro-interactions, smooth `<details>`.
+  app-style bottom navigation, sticky WhatsApp/call bar, smooth `<details>`.
 - Measured on a throttled mid-range phone (4× CPU, 9 Mbps/80 ms): **LCP ≈ 1.0 s, CLS 0.000** on home,
   search and listing pages.
 
@@ -130,8 +137,8 @@ icons (`assets/icons/`). To add an icon, download its SVG from lucide.dev into `
 the list in the script and run it. No icon fonts, no emoji or text glyphs as icons.
 
 ## Self-contained by design
-Everything is served from your own folder: **fonts are self-hosted** (Noto Sans Arabic for Kurdish/Arabic,
-Inter for Latin — SIL Open Font License, see `assets/fonts/`), Leaflet and markercluster are vendored in
+Everything is served from your own folder: **fonts are self-hosted** (Noto Kufi Arabic and Noto Naskh
+Arabic, both covering Kurdish, Arabic and Latin — SIL Open Font License, see `assets/fonts/`), Leaflet and markercluster are vendored in
 `assets/vendor/`, videos and photos live in `uploads/`. The Content-Security-Policy only allows `'self'`.
 
 The **one exception is map tiles** (the map background images). Self-hosting street-level tiles for

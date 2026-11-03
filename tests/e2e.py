@@ -251,7 +251,8 @@ ok('Property for sale in Erbil' in anon.get(B + '/city/erbil?purpose=sale').text
 home = anon.get(B + '/').text
 own = re.escape(re.match(r'https?://[^/]+', B).group(0))
 ok(not re.search(r'<(script|link)[^>]+(src|href)="(?!' + own + r')https?://', home.split('<body')[0]) and 'googleapis' not in home, 'no external fonts/scripts/styles in <head>')
-ok('fonts/noto-sans-arabic-wght.woff2' in anon.get(B + '/assets/css/app.css').text and anon.get(B + '/assets/fonts/noto-sans-arabic-wght.woff2').status_code == 200, 'self-hosted @font-face')
+_css = anon.get(B + '/assets/css/app.css').text
+ok(all(f'fonts/{f}' in _css and anon.get(B + f'/assets/fonts/{f}').status_code == 200 for f in ('noto-kufi-arabic-wght.woff2', 'noto-naskh-arabic-wght.woff2')), 'self-hosted @font-face (Kufi + Naskh)')
 
 # ── Report a listing
 rp = sess(); html = rp.get(pr.url).text

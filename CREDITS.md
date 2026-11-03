@@ -5,8 +5,8 @@ Everything below ships with the site and is self-hosted. This file is developmen
 
 | Asset | Where | Licence |
 |---|---|---|
-| Noto Sans Arabic (variable) | `assets/fonts/noto-sans-arabic-wght.woff2` | SIL Open Font License 1.1 — `assets/fonts/LICENSE-NotoSansArabic.txt` |
-| Inter (variable, web) | `assets/fonts/inter-*.woff2` | SIL Open Font License 1.1 — `assets/fonts/LICENSE-Inter.txt` |
+| Noto Kufi Arabic (variable, subset to Arabic script + Latin) | `assets/fonts/noto-kufi-arabic-wght.woff2` | SIL Open Font License 1.1 — `assets/fonts/LICENSE-NotoKufiArabic.txt` |
+| Noto Naskh Arabic (variable, subset to Arabic script + Latin) | `assets/fonts/noto-naskh-arabic-wght.woff2` | SIL Open Font License 1.1 — `assets/fonts/LICENSE-NotoNaskhArabic.txt` |
 | Inter (TTF, used by GD for share images) | `app/fonts/Inter-*.ttf` | SIL Open Font License 1.1 — `app/fonts/LICENSE-Inter.txt` |
 | Lucide icons | `bin/icon-pack/lucide/`, built into `app/views/partials/icons.php` | ISC — `bin/icon-pack/lucide/LICENSE` |
 | Simple Icons (WhatsApp, Telegram marks) | `bin/icon-pack/simple-icons/` | CC0 1.0 — `bin/icon-pack/simple-icons/LICENSE.md`; brand marks used only to link to those services |
