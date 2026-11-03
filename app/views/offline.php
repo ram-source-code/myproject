@@ -1,5 +1,5 @@
 <div class="container error-page">
-    <svg class="offline-icon" aria-hidden="true"><use href="#i-globe"></use></svg>
+    <svg class="offline-icon" aria-hidden="true"><use href="#i-wifi-off"></use></svg>
     <h1 class="page-title"><?= e(t('offline_title')) ?></h1>
     <p class="muted"><?= e(t('offline_text')) ?></p>
     <div class="error-actions">

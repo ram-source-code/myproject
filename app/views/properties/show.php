@@ -99,7 +99,7 @@ $isLive = $p['status'] === 'published';
                         <span data-fav-label><?= e($isFav ? t('fav_remove') : t('fav_add')) ?></span>
                     </button>
                 </form>
-                <button type="button" class="btn btn-outline btn-sm" data-share data-title="<?= e($p['title']) ?>"><?= e(t('share')) ?></button>
+                <button type="button" class="btn btn-outline btn-sm" data-share data-title="<?= e($p['title']) ?>"><svg aria-hidden="true"><use href="#i-share"></use></svg><?= e(t('share')) ?></button>
                 <?php if ($canManage): ?>
                     <a class="btn btn-outline btn-sm" href="<?= e(url('dashboard/properties/' . $p['id'] . '/edit')) ?>"><svg aria-hidden="true"><use href="#i-edit"></use></svg><?= e(t('edit')) ?></a>
                 <?php endif; ?>
