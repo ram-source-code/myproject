@@ -23,7 +23,7 @@ return [
     'browse' => 'Browse',
     'for_sale' => 'Properties for sale',
     'for_rent' => 'Properties for rent',
-    'list_with_us' => 'List your property',
+    'list_with_us' => 'For real estate offices',
     'rights' => 'All rights reserved.',
     'stat_listings' => 'Listings',
     'stat_sale' => 'For sale',
@@ -322,7 +322,7 @@ return [
     // ── Kurdistan / offices / PWA / push ──
     'tagline' => 'Homes and property in Kurdistan',
     'meta_description' => 'Find houses, apartments, villas and land for sale or rent in Erbil, Sulaymaniyah, Duhok and across Kurdistan. Follow real estate offices and get notified about new listings.',
-    'footer_about' => 'Kurdistan\'s property marketplace — connecting real estate offices, owners and people looking for a home or an investment.',
+    'footer_about' => 'Kurdistan\'s property marketplace. Houses, apartments and land from real estate offices in Erbil, Sulaymaniyah, Duhok and beyond.',
     'hero_kicker' => 'Erbil · Sulaymaniyah · Duhok · Halabja',
     'hero_title' => 'Find your next home in Kurdistan',
     'hero_sub' => 'Houses, apartments and land from real estate offices across Kurdistan. Follow offices to hear about new listings first.',
@@ -353,7 +353,7 @@ return [
     'cta_title' => 'Do you run a real estate office?',
     'cta_text' => 'Create your office page, publish listings with photos and reach your followers with one tap.',
     'cta_button' => 'Register your office',
-    'list_with_us_text' => 'Real estate offices and owners can publish listings with photos in minutes.',
+    'list_with_us_text' => 'Put your office here: listings with photos, followers and notifications.',
     'register_office' => 'Register an office',
 
     // property extras
