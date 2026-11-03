@@ -95,10 +95,10 @@ function with_distances(array $rows, float $lat, float $lng): array
 function nearby_properties(float $lat, float $lng, float $radiusKm, int $limit, ?int $excludeId = null): array
 {
     [$gw, $ga, $go, $goa] = geo_sql($lat, $lng, $radiusKm);
-    $sql = PROPERTY_SELECT . " WHERE p.status = 'published' AND $gw" . ($excludeId ? ' AND p.id != ?' : '') . " ORDER BY $go, p.id DESC LIMIT ?";
+    $sql = "SELECT p.id FROM properties p WHERE p.status = 'published' AND $gw" . ($excludeId ? ' AND p.id != ?' : '') . " ORDER BY $go, p.id DESC LIMIT ?";
     $stmt = db()->prepare($sql);
     $stmt->execute([...$ga, ...($excludeId ? [$excludeId] : []), ...$goa, $limit]);
-    return with_distances($stmt->fetchAll(), $lat, $lng);
+    return with_distances(properties_by_ids($stmt->fetchAll(PDO::FETCH_COLUMN)), $lat, $lng);
 }
 
 /**
@@ -137,7 +137,8 @@ function recommend_properties(array $seedIds, int $limit = 8, ?array $near = nul
     $cond = [];
     if ($cityIds) { $cond[] = 'p.city_id IN (' . implode(',', array_fill(0, count($cityIds), '?')) . ')'; array_push($args, ...$cityIds); }
     if ($typeKeys) { $cond[] = 'p.type IN (' . implode(',', array_fill(0, count($typeKeys), '?')) . ')'; array_push($args, ...$typeKeys); }
-    $sql = PROPERTY_SELECT . " WHERE p.status = 'published' AND p.purpose = ? " . ($cond ? 'AND (' . implode(' OR ', $cond) . ')' : '')
+    // Score on light columns only; full cards are loaded for the winners at the end.
+    $sql = "SELECT p.id, p.city_id, p.type, p.price_usd, p.lat, p.lng, p.is_featured, p.created_at FROM properties p WHERE p.status = 'published' AND p.purpose = ? " . ($cond ? 'AND (' . implode(' OR ', $cond) . ')' : '')
         . ' AND p.id NOT IN (' . $in . ') ORDER BY p.created_at DESC LIMIT 300';
     $stmt = db()->prepare($sql);
     $stmt->execute([...$args, ...$seedIds]);
@@ -162,5 +163,13 @@ function recommend_properties(array $seedIds, int $limit = 8, ?array $near = nul
         $scored[] = $p;
     }
     usort($scored, static fn($a, $b) => $b['_score'] <=> $a['_score']);
-    return array_slice($scored, 0, $limit);
+    $top = array_slice($scored, 0, $limit);
+    $meta = array_column($top, null, 'id');
+    $rows = properties_by_ids(array_column($top, 'id'));
+    foreach ($rows as &$r) {
+        $r['distance_km'] = $meta[$r['id']]['distance_km'] ?? null;
+        $r['_score'] = $meta[$r['id']]['_score'];
+    }
+    unset($r);
+    return $rows;
 }

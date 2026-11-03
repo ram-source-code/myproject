@@ -203,10 +203,10 @@ function dash_image_cover(int $imageId): void
     require_login();
     $img = owned_image_or_404($imageId);
     $pdo = db();
-    $pdo->beginTransaction();
+    $pdo->exec('BEGIN IMMEDIATE');      // take the write lock up front (a deferred BEGIN can fail with SQLITE_BUSY under load)
     $pdo->prepare('UPDATE property_images SET sort_order = sort_order + 1 WHERE property_id = ?')->execute([$img['property_id']]);
     $pdo->prepare('UPDATE property_images SET sort_order = 0 WHERE id = ?')->execute([$imageId]);
-    $pdo->commit();
+    $pdo->exec('COMMIT');
     flash('success', t('cover_set'));
     redirect(url('dashboard/properties/' . $img['property_id'] . '/edit') . '#images');
 }

@@ -119,9 +119,10 @@ function search_properties(array $f, int $page, int $perPage): array
     $cnt->execute($args);
     $pg = paginate((int) $cnt->fetchColumn(), $perPage, $page);
 
-    $stmt = db()->prepare(PROPERTY_SELECT . " WHERE $w ORDER BY $order, p.id DESC LIMIT ? OFFSET ?");
-    $stmt->execute([...$args, ...$orderArgs, $pg['per_page'], $pg['offset']]);
-    $rows = $stmt->fetchAll();
+    // Deferred join: sort + page on the bare table (index-friendly, cheap columns), then build full cards for this page only.
+    $ids = db()->prepare("SELECT p.id FROM properties p WHERE $w ORDER BY $order, p.id DESC LIMIT ? OFFSET ?");
+    $ids->execute([...$args, ...$orderArgs, $pg['per_page'], $pg['offset']]);
+    $rows = properties_by_ids($ids->fetchAll(PDO::FETCH_COLUMN));
     if (($pt = parse_near($f['near'])) !== null) {
         $rows = with_distances($rows, $pt[0], $pt[1]);
     }
@@ -143,6 +144,28 @@ function map_properties(array $f, int $limit = 500): array
     return $rows;
 }
 
+
+/** Full card rows for the given ids, in the same order (one query). */
+function properties_by_ids(array $ids): array
+{
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    if (!$ids) {
+        return [];
+    }
+    $stmt = db()->prepare(PROPERTY_SELECT . ' WHERE p.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
+    $stmt->execute($ids);
+    $byId = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $byId[(int) $r['id']] = $r;
+    }
+    $out = [];
+    foreach ($ids as $id) {
+        if (isset($byId[$id])) {
+            $out[] = $byId[$id];
+        }
+    }
+    return $out;
+}
 
 function find_property(int $id): ?array
 {
