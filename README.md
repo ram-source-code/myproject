@@ -110,6 +110,12 @@ Mudhafaria minaret, the Zagros line, new blocks and a crane), a Kurdish kilim ba
 sketches for "how it works", empty states and the error page are drawn with a hand-drawn pen
 (`bin/art/pen.php`: double, slightly disagreeing strokes, overshoot and uneven hatching). Change a drawing in
 `bin/build-art.php` and run `php bin/build-art.php`; the output is plain SVG whose ink follows the theme colour.
+**Demo photos are sketches too:** `--demo` (and the installer's demo option) draws every listing photo as an
+ink-and-watercolour sketch with GD alone (`app/sketch.php`, scenes in `app/sketch_scenes.php`), in real perspective
+and true to how property here looks: stone-clad villas with a columned porch, iron gate and rooftop water tanks,
+solar heater and dish; flat-roofed houses behind a yard wall with the generator cable coming in; gated tower
+compounds; shop rows with roller shutters and split-AC units; plots with survey stakes and concrete frames rising
+next door; and rooms (living room with a kilim rug, kitchen, shop and office interiors). About 0.3 s a photo.
 - **Instant navigation:** Speculation Rules prefetch likely next pages on hover/touch and prerender listing,
   office and city pages (prerenders never inflate view counts — the page reports the view only when shown).
 - **Smooth page changes:** cross-document **View Transitions**; the card photo morphs into the listing hero and
