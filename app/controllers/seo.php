@@ -87,25 +87,37 @@ function city_page(string $slug): void
 
 function sitemap_xml(): void
 {
+    // Rebuilt at most hourly: with tens of thousands of listings, building it costs far more than serving a file.
+    $cache = dirname((string) config('db_path')) . '/sitemap-' . substr(hash('sha256', absolute_origin() . base_path()), 0, 12) . '.xml';
+    header('Content-Type: application/xml; charset=utf-8');
+    header('Cache-Control: public, max-age=3600');
+    if (is_file($cache) && filemtime($cache) > time() - 3600) {
+        readfile($cache);
+        exit;
+    }
+    ob_start();
     $o = absolute_origin();
     $urls = [[$o . url('/'), null], [$o . url('properties'), null], [$o . url('offices'), null],
              [$o . url('privacy'), '2026-11-02'], [$o . url('terms'), '2026-11-02']];
     foreach (db()->query("SELECT DISTINCT c.slug FROM cities c JOIN properties p ON p.city_id = c.id AND p.status = 'published'") as $c) {
         $urls[] = [$o . url('city/' . $c['slug']), null];
     }
-    foreach (db()->query("SELECT o.id FROM offices o JOIN users u ON u.id = o.user_id AND u.status = 'active'") as $r) {
+    foreach (db()->query("SELECT o.id FROM offices o JOIN users u ON u.id = o.user_id AND u.status = 'active' WHERE o.activated_at IS NOT NULL") as $r) {
         $urls[] = [$o . url('office/' . $r['id']), null];
     }
     foreach (db()->query("SELECT id, title, updated_at FROM properties WHERE status = 'published' ORDER BY id DESC LIMIT 45000") as $p) {
         $urls[] = [property_url($p, true), substr($p['updated_at'], 0, 10)];
     }
-    header('Content-Type: application/xml; charset=utf-8');
-    header('Cache-Control: public, max-age=3600');
     echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
     foreach ($urls as [$loc, $mod]) {
         echo '  <url><loc>' . htmlspecialchars($loc, ENT_XML1) . '</loc>' . ($mod ? '<lastmod>' . $mod . '</lastmod>' : '') . "</url>\n";
     }
     echo "</urlset>\n";
+    $xml = (string) ob_get_flush();
+    $tmp = $cache . '.' . bin2hex(random_bytes(4));
+    if (@file_put_contents($tmp, $xml) !== false) {
+        @rename($tmp, $cache);       // atomic: a crawler never sees a half-written file
+    }
     exit;
 }
 

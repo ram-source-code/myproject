@@ -28,11 +28,13 @@ function db(): PDO
     $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->exec('PRAGMA temp_store = MEMORY');
     $pdo->exec('PRAGMA cache_size = -16000');    // ~16 MB
+    $pdo->exec('PRAGMA journal_size_limit = 33554432');   // after a checkpoint, shrink a WAL that grew past 32 MB
 
     // WAL (concurrent readers + one writer) is persistent once set, so it is decided ONCE on a fresh database.
     // Some filesystems (network drives) report success and then fail on the first write: the first migration
     // is that write test, and on failure the database falls back to the classic rollback journal.
-    if ((int) $pdo->query('PRAGMA user_version')->fetchColumn() === 0) {
+    $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
+    if ($version === 0) {
         $mode = strtolower((string) $pdo->query('PRAGMA journal_mode = WAL')->fetchColumn());
         try {
             migrate($pdo);
@@ -44,7 +46,7 @@ function db(): PDO
             $pdo->exec('PRAGMA journal_mode = DELETE');
             migrate($pdo);
         }
-    } else {
+    } elseif ($version < count(migrations())) {
         migrate($pdo);
     }
     $wal = strtolower((string) $pdo->query('PRAGMA journal_mode')->fetchColumn()) === 'wal';
@@ -387,6 +389,17 @@ function migrations(): array
         ALTER TABLE offices ADD COLUMN activated_at TEXT;
         ALTER TABLE offices ADD COLUMN active_until TEXT;
         UPDATE offices SET activated_at = datetime('now');
+        SQL,
+        // v7 — one index per sort order, so a page reads 12 rows instead of sorting every listing;
+        // a partial index for map / "near me" boxes; office listing counts from the index alone.
+        <<<'SQL'
+        CREATE INDEX IF NOT EXISTS idx_properties_new   ON properties(status, created_at);
+        CREATE INDEX IF NOT EXISTS idx_properties_views ON properties(status, views);
+        CREATE INDEX IF NOT EXISTS idx_properties_area  ON properties(status, area);
+        CREATE INDEX IF NOT EXISTS idx_properties_geo   ON properties(lat, lng) WHERE status = 'published';
+        CREATE INDEX IF NOT EXISTS idx_properties_user_status ON properties(user_id, status);
+        DROP INDEX IF EXISTS idx_properties_user;
+        ANALYZE;
         SQL,
     ];
 }

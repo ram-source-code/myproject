@@ -656,6 +656,11 @@ function run_maintenance(): void
         $pdo->exec("DELETE FROM push_subscriptions WHERE last_seen_at < datetime('now', '-400 days')");
         $pdo->prepare('DELETE FROM hits WHERE t < ?')->execute([time() - 86400]);
         $pdo->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 86400]);
+        // Keep the query planner's statistics fresh (cheap: re-analyses only tables that changed a lot),
+        // and fold the WAL back into the database file so it stays small.
+        $pdo->exec('PRAGMA analysis_limit = 1000');
+        $pdo->exec('PRAGMA optimize');
+        $pdo->query('PRAGMA wal_checkpoint(TRUNCATE)')->fetchAll();
     } catch (Throwable $e) {
         error_log('aqarat maintenance: ' . $e->getMessage());
     }
